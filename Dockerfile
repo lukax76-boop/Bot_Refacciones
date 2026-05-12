@@ -1,28 +1,24 @@
-FROM ghcr.io/puppeteer/puppeteer:latest
-
-# Cambiar al usuario root temporalmente para copiar archivos e instalar
-USER root
-
-# Variables de entorno cruciales para Puppeteer en Docker
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+FROM node:20-bullseye-slim
 
 WORKDIR /app
 
-# Copiar configuración de dependencias
-COPY package*.json ./
+# Instalar Chromium y las librerías del sistema que necesita Puppeteer
+RUN apt-get update && apt-get install -y \
+    chromium \
+    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias
+# Variables para decirle a Puppeteer dónde está Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Copiar e instalar
+COPY package*.json ./
 RUN npm install
 
-# Copiar el código del proyecto
+# Copiar el resto del proyecto
 COPY . .
-
-# Dar permisos al usuario seguro de puppeteer para que pueda escribir en auth/cache
-RUN chown -R pptruser:pptruser /app
-
-# Volver al usuario de menores privilegios por seguridad
-USER pptruser
 
 EXPOSE 3000
 
