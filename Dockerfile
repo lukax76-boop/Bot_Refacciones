@@ -1,9 +1,12 @@
 FROM ghcr.io/puppeteer/puppeteer:latest
 
-# Necesitamos ser root temporalmente para instalar cosas
+# Cambiar al usuario root temporalmente para copiar archivos e instalar
 USER root
 
-# Crear directorio de la app
+# Variables de entorno cruciales para Puppeteer en Docker
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+
 WORKDIR /app
 
 # Copiar configuración de dependencias
