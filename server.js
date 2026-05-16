@@ -179,11 +179,11 @@ client.on('message', async (message) => {
     
     // Comando para reiniciar la conversación en cualquier momento
     if (text.toLowerCase() === 'reiniciar' || text.toLowerCase() === 'menu') {
-        await updateUser(phone, { step: 'idle', current_state: null });
+    if (text.toLowerCase() === 'reiniciar' || text.toLowerCase() === 'menu') {
+        await updateUser(phone, { step: 'idle' });
         console.log(`[ENVIANDO] a ${phone}: "🔄 Conversación reiniciada..."`);
         await client.sendMessage(phone, "🔄 *Conversación reiniciada*");
         step = 'idle';
-        user.current_state = null;
         delete userCarts[phone];
         delete userPendingItems[phone];
         // Se deja continuar hacia abajo (no hay return) para que el bloque 'idle' se encargue de saludar.
@@ -199,21 +199,34 @@ client.on('message', async (message) => {
 
     try {
         if (step === 'idle') {
-            const detectedState = detectStateFromPhone(phone);
-            
-            if (detectedState) {
-                // Autodetectó la LADA
-                await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
-                console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... estado detectado: ${detectedState}"`);
-                await client.sendMessage(phone, `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*, así que estoy haciendo las consultas para ese estado.\n\nDime qué refacción buscas.\n\n💡 _Para buscar en otro estado, envía la palabra *ESTADO*_`);
+            if (user.current_state) {
+                // Ya tiene un estado recordado por compras/búsquedas previas
+                await updateUser(phone, { step: 'asking_part' });
+                
+                let greeting = `¡Bienvenido al cotizador de refacciones! 🚗`;
+                if (user.client_name) greeting = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗`;
+                
+                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas.\n\n💡 _(Si deseas cambiar de estado, envía la palabra *ESTADO*)_`;
+                
+                console.log(`[ENVIANDO] a ${phone}: "Estado recordado: ${user.current_state}"`);
+                await client.sendMessage(phone, greeting);
             } else {
-                // No pudo autodetectar
-                await updateUser(phone, { step: 'asking_state' });
-                console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... ¿Estado?"`);
-                if (user.client_name && user.client_number) {
-                    await client.sendMessage(phone, `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy? (Ej: Jalisco, CDMX, Nuevo León)`);
+                const detectedState = detectStateFromPhone(phone);
+                
+                if (detectedState) {
+                    // Autodetectó la LADA
+                    await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
+                    console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... estado detectado: ${detectedState}"`);
+                    await client.sendMessage(phone, `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*, así que estoy haciendo las consultas para ese estado.\n\nDime qué refacción buscas.\n\n💡 _Para buscar en otro estado, envía la palabra *ESTADO*_`);
                 } else {
-                    await client.sendMessage(phone, "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas? (Ej: Jalisco, Nuevo León, CDMX)");
+                    // No pudo autodetectar
+                    await updateUser(phone, { step: 'asking_state' });
+                    console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... ¿Estado?"`);
+                    if (user.client_name && user.client_number) {
+                        await client.sendMessage(phone, `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy? (Ej: Jalisco, CDMX, Nuevo León)`);
+                    } else {
+                        await client.sendMessage(phone, "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas? (Ej: Jalisco, Nuevo León, CDMX)");
+                    }
                 }
             }
         } 
@@ -422,7 +435,7 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
         await logAnalytics({ phone_number: phone, search_query: item.part.part_number, found: true, ordered: true, branch_id: item.branch.branch_id, state: currentState });
     }
 
-    await updateUser(phone, { step: 'idle', current_state: null });
+    await updateUser(phone, { step: 'idle' });
     delete userCarts[phone];
 }
 
