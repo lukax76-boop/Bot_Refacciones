@@ -163,15 +163,30 @@ client.on('message', async (message) => {
     console.log(`\n📩 [MENSAJE RECIBIDO] De: ${phone} | Texto: "${text}"`);
     console.log(`🔍 [DEBUG] author: ${message.author}, participant: ${message.id ? message.id.participant : 'N/A'}, remote: ${message.id ? message.id.remote : 'N/A'}`);
     
+    let realPhone = null;
     try {
         const contact = await message.getContact();
         console.log(`🔍 [DEBUG CONTACT] number: ${contact.number}, id._serialized: ${contact.id ? contact.id._serialized : 'N/A'}`);
+        if (contact && contact.id && contact.id._serialized) {
+            realPhone = contact.id._serialized.replace('@c.us', '').replace('@lid', '');
+        } else if (contact && contact.number) {
+            realPhone = contact.number;
+        }
+        if (realPhone && realPhone.startsWith('521') && realPhone.length === 13) {
+            realPhone = '52' + realPhone.substring(3);
+        }
     } catch(e) {}
     
     const user = await getUser(phone);
     if (!user) {
         console.log(`❌ [ERROR] No se pudo obtener ni crear el usuario en la base de datos para ${phone}. Verifica tu conexión a Supabase y que las tablas existan.`);
         return; // Error de BD
+    }
+    
+    // Guardar el número real en la base de datos para mostrarlo correctamente en el Dashboard
+    if (realPhone && user.real_phone !== realPhone) {
+        await updateUser(phone, { real_phone: realPhone });
+        user.real_phone = realPhone;
     }
     
     let step = user.step || 'idle';

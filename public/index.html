@@ -328,9 +328,10 @@
                 
                 clients.forEach(client => {
                     const tr = document.createElement('tr');
-                    const cleanPhone = client.phone_number.replace('@c.us', '').replace('@lid', '');
+                    // Mostrar real_phone si está disponible, si no, limpiar el ID opaco como fallback
+                    const displayPhone = client.real_phone || client.phone_number.replace('@c.us', '').replace('@lid', '');
                     tr.innerHTML = `
-                        <td>${cleanPhone}</td>
+                        <td>${displayPhone}</td>
                         <td><strong>${client.client_name}</strong></td>
                         <td>
                             <input type="text" id="client-num-${client.phone_number}" value="${client.client_number || ''}" placeholder="Dejar en blanco si no tiene" style="padding: 0.4rem; border-radius: 0.3rem; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.3); color: white; width: 100%;">
