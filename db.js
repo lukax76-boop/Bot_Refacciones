@@ -192,10 +192,6 @@ async function getBranchesDirectory(state) {
         msg += `📍 *${b.name}*\n`;
         if (b.address) msg += `🗺️ Dirección: ${b.address}\n`;
         if (b.contact) msg += `📞 Contacto: ${b.contact}\n`;
-        if (b.agent_phone) {
-            let phoneClean = b.agent_phone.replace('52', '').replace('521', '').trim();
-            msg += `📱 WhatsApp: ${phoneClean}\n`;
-        }
         msg += `\n`;
     });
     

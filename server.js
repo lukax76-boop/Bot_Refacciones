@@ -488,7 +488,7 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
             const price = item.part.price ? parseFloat(item.part.price) : 0;
             const itemTotal = price * item.quantity;
             agentTotal += itemTotal;
-            agentMsg += `- ${item.quantity}x ${item.part.description} (Número de Parte: ${item.part.part_number})\n`;
+            agentMsg += `- ${item.quantity}x ${item.part.description} (Número de Parte: ${item.part.part_number}) - Sucursal: ${item.branch.branch_name}\n`;
         });
         
         agentMsg += `\n*Subtotal (con IVA):* $${agentTotal.toFixed(2)} MXN\n\n`;
