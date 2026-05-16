@@ -163,6 +163,15 @@ async function updateClientNumber(phone, clientNumber) {
     return true;
 }
 
+async function getAvailableStates() {
+    if (!supabase) return [];
+    const { data } = await supabase.from('branches').select('state');
+    if (!data) return [];
+    // Filtramos duplicados y nulos
+    const states = [...new Set(data.map(b => b.state).filter(Boolean))];
+    return states;
+}
+
 module.exports = {
     supabase,
     getUser,
@@ -171,5 +180,6 @@ module.exports = {
     logAnalytics,
     getStats,
     getClients,
-    updateClientNumber
+    updateClientNumber,
+    getAvailableStates
 };
