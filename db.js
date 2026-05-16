@@ -144,11 +144,32 @@ async function getStats() {
     };
 }
 
+async function getClients() {
+    if (!supabase) return [];
+    const { data } = await supabase.from('users')
+        .select('phone_number, client_name, client_number')
+        .not('client_name', 'is', null)
+        .order('client_name', { ascending: true });
+    return data || [];
+}
+
+async function updateClientNumber(phone, clientNumber) {
+    if (!supabase) return false;
+    const { error } = await supabase.from('users').update({ client_number: clientNumber }).eq('phone_number', phone);
+    if (error) {
+        console.error("Error actualizando número de cliente:", error);
+        return false;
+    }
+    return true;
+}
+
 module.exports = {
     supabase,
     getUser,
     updateUser,
     searchParts,
     logAnalytics,
-    getStats
+    getStats,
+    getClients,
+    updateClientNumber
 };

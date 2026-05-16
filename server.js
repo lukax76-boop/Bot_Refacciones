@@ -4,7 +4,7 @@ const xlsx = require('xlsx');
 const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats } = require('./db');
+const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber } = require('./db');
 
 // ==========================================
 // 1. CONFIGURACIÓN DEL SERVIDOR WEB (DASHBOARD)
@@ -42,6 +42,19 @@ app.post('/api/upload', upload.single('excel'), async (req, res) => {
         console.error("Error procesando Excel:", error);
         res.status(500).json({ error: "Error procesando el archivo" });
     }
+});
+
+// API: Obtener Clientes
+app.get('/api/clients', async (req, res) => {
+    const clients = await getClients();
+    res.json(clients);
+});
+
+// API: Actualizar Número de Cliente
+app.post('/api/clients/:phone', async (req, res) => {
+    const { clientNumber } = req.body;
+    const success = await updateClientNumber(req.params.phone, clientNumber);
+    res.json({ success });
 });
 
 app.listen(PORT, () => {
@@ -141,7 +154,11 @@ client.on('message', async (message) => {
                 // No pudo autodetectar
                 await updateUser(phone, { step: 'asking_state' });
                 console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... ¿Estado?"`);
-                await client.sendMessage(phone, "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas? (Ej: Jalisco, Nuevo León, CDMX)");
+                if (user.client_name && user.client_number) {
+                    await client.sendMessage(phone, `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy? (Ej: Jalisco, CDMX, Nuevo León)`);
+                } else {
+                    await client.sendMessage(phone, "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas? (Ej: Jalisco, Nuevo León, CDMX)");
+                }
             }
         } 
         else if (step === 'asking_state') {
@@ -195,38 +212,70 @@ client.on('message', async (message) => {
             
             if (sessionData && sessionData[optionIndex]) {
                 const selection = sessionData[optionIndex];
-                const { part, branch } = selection;
-                
-                console.log(`[ENVIANDO] a ${phone}: "¡Excelente! 🎉"`);
-                await client.sendMessage(phone, `¡Excelente! 🎉\nHas solicitado la pieza *${part.part_number}* en la sucursal *${branch.branch_name}*.\n\nEn breve un agente se comunicará contigo por este medio para confirmar tu pedido.`);
-                
-                if (branch.agent_phone) {
-                    const cleanClientPhone = phone.replace('@c.us', '').replace('@lid', '');
-                    const agentMsg = `🔔 *NUEVO PEDIDO DESDE WHATSAPP BOT*\n\n*Cliente:* wa.me/${cleanClientPhone}\n*Pieza:* ${part.description} (No. ${part.part_number})\n*Sucursal:* ${branch.branch_name}\n\n👉 Toca el enlace del cliente arriba para abrir el chat y enviarle su confirmación.`;
-                    
-                    const formattedAgentPhone = branch.agent_phone.includes('@c.us') ? branch.agent_phone : `${branch.agent_phone}@c.us`;
-                    console.log(`[NOTIFICANDO AGENTE] a ${formattedAgentPhone}`);
-                    
-                    try {
-                        await client.sendMessage(formattedAgentPhone, agentMsg);
-                        console.log(`✅ [AGENTE NOTIFICADO]`);
-                    } catch (agentError) {
-                        console.error(`⚠️ [ALERTA] No se pudo enviar mensaje al agente (${formattedAgentPhone}). Es probable que sea un número inventado o no tenga WhatsApp. El pedido del cliente seguirá su curso normal.`);
-                    }
-                }
-                
-                await logAnalytics({ phone_number: phone, search_query: part.part_number, found: true, ordered: true, branch_id: branch.branch_id, state: user.current_state });
-                
-                await updateUser(phone, { step: 'idle', current_state: null });
-                delete userSearchSessions[phone];
+                // En lugar de cerrar la venta, guardamos lo elegido y preguntamos cantidad
+                userSearchSessions[phone] = { part, branch };
+                await updateUser(phone, { step: 'asking_quantity' });
+                console.log(`[ENVIANDO] a ${phone}: "¿Cuántas piezas necesitas?"`);
+                await client.sendMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
             } else {
                 console.log(`[ENVIANDO] a ${phone}: "⚠️ Opción inválida"`);
                 await client.sendMessage(phone, "⚠️ Opción inválida. Responde con el número de la lista o 'Reiniciar'.");
             }
         }
+        else if (step === 'asking_quantity') {
+            const quantity = parseInt(text);
+            if (isNaN(quantity) || quantity <= 0) {
+                await client.sendMessage(phone, "⚠️ Por favor ingresa un número válido (ej. 1, 2, 3).");
+                return;
+            }
+            
+            const sessionData = userSearchSessions[phone];
+            sessionData.quantity = quantity;
+            
+            if (user.client_name && user.client_number) {
+                await processOrder(phone, sessionData, user.client_name, user.client_number, user.current_state);
+            } else {
+                await updateUser(phone, { step: 'asking_name' });
+                console.log(`[ENVIANDO] a ${phone}: "¿A nombre de qué persona o empresa...?"`);
+                await client.sendMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+            }
+        }
+        else if (step === 'asking_name') {
+            const clientName = text;
+            await updateUser(phone, { client_name: clientName });
+            
+            const sessionData = userSearchSessions[phone];
+            await processOrder(phone, sessionData, clientName, 'Nuevo Registro', user.current_state);
+        }
     } catch (error) {
         console.error("Error procesando mensaje:", error);
     }
 });
+
+// Helper Function para procesar la orden final
+async function processOrder(phone, sessionData, clientName, clientNumber, currentState) {
+    const { part, branch, quantity } = sessionData;
+    
+    console.log(`[ENVIANDO] a ${phone}: "¡Excelente! 🎉"`);
+    await client.sendMessage(phone, `¡Excelente! 🎉\nHas solicitado *${quantity} pieza(s)* de *${part.part_number}* en la sucursal *${branch.branch_name}*.\n\nEn breve un agente se comunicará contigo por este medio para confirmar tu pedido.`);
+    
+    if (branch.agent_phone) {
+        const cleanClientPhone = phone.replace('@c.us', '').replace('@lid', '');
+        const agentMsg = `🔔 *NUEVO PEDIDO DESDE WHATSAPP BOT*\n\n*Cliente (Wa):* wa.me/${cleanClientPhone}\n*Facturar a:* ${clientName}\n*No. Cliente:* ${clientNumber}\n*Pieza:* ${part.description} (No. ${part.part_number})\n*Cantidad:* ${quantity}\n*Sucursal:* ${branch.branch_name}\n\n👉 Toca el enlace del cliente arriba para abrir el chat.`;
+        
+        const formattedAgentPhone = branch.agent_phone.includes('@c.us') ? branch.agent_phone : `${branch.agent_phone}@c.us`;
+        try {
+            await client.sendMessage(formattedAgentPhone, agentMsg);
+            console.log(`✅ [AGENTE NOTIFICADO]`);
+        } catch (error) {
+            console.error(`⚠️ [ALERTA] No se pudo enviar mensaje al agente (${formattedAgentPhone}).`);
+        }
+    }
+    
+    await logAnalytics({ phone_number: phone, search_query: part.part_number, found: true, ordered: true, branch_id: branch.branch_id, state: currentState });
+    
+    await updateUser(phone, { step: 'idle', current_state: null });
+    delete userSearchSessions[phone];
+}
 
 client.initialize();

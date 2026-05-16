@@ -262,6 +262,21 @@
         </div>
     </div>
 
+    <!-- GESTIÓN DE CLIENTES -->
+    <div class="container" style="margin-top: 2rem; display: block;">
+        <div class="glass-panel">
+            <h2 class="panel-title">👥 Gestión de Clientes Registrados</h2>
+            <div class="table-container">
+                <table class="data-table" id="table-clients">
+                    <thead>
+                        <tr><th>Teléfono</th><th>Nombre de Facturación</th><th>No. Cliente (Vendedor)</th><th>Acción</th></tr>
+                    </thead>
+                    <tbody id="body-clients"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Cargar Estadísticas
         async function loadStats() {
@@ -303,9 +318,65 @@
             }
         }
 
+        // Cargar Clientes Registrados
+        async function loadClients() {
+            try {
+                const response = await fetch('/api/clients');
+                const clients = await response.json();
+                const tbody = document.getElementById('body-clients');
+                tbody.innerHTML = '';
+                
+                clients.forEach(client => {
+                    const tr = document.createElement('tr');
+                    const cleanPhone = client.phone_number.replace('@c.us', '').replace('@lid', '');
+                    tr.innerHTML = `
+                        <td>${cleanPhone}</td>
+                        <td><strong>${client.client_name}</strong></td>
+                        <td>
+                            <input type="text" id="client-num-${client.phone_number}" value="${client.client_number || ''}" placeholder="Dejar en blanco si no tiene" style="padding: 0.4rem; border-radius: 0.3rem; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.3); color: white; width: 100%;">
+                        </td>
+                        <td>
+                            <button class="btn btn-sm" onclick="saveClientNumber('${client.phone_number}')" style="background: var(--success); width: 100%;">Guardar</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error("Error cargando clientes", e);
+            }
+        }
+
+        async function saveClientNumber(phone) {
+            const input = document.getElementById(`client-num-${phone}`);
+            const btn = input.parentElement.nextElementSibling.querySelector('button');
+            const clientNumber = input.value.trim() === '' ? null : input.value.trim();
+            
+            const originalText = btn.textContent;
+            btn.textContent = '...';
+            try {
+                const res = await fetch(`/api/clients/${encodeURIComponent(phone)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientNumber })
+                });
+                if (res.ok) {
+                    btn.textContent = '¡Guardado!';
+                    setTimeout(() => btn.textContent = 'Guardar', 2000);
+                } else {
+                    btn.textContent = 'Error';
+                }
+            } catch (e) {
+                btn.textContent = 'Error';
+            }
+        }
+
         loadStats();
+        loadClients();
         // Actualizar cada 10 segundos
-        setInterval(loadStats, 10000);
+        setInterval(() => {
+            loadStats();
+            // No recargar clientes automáticamente para no borrar lo que el vendedor esté escribiendo
+        }, 10000);
 
         // UI del Dropzone
         const fileInput = document.getElementById('excelFile');
