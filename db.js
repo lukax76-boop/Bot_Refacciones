@@ -198,6 +198,25 @@ async function getBranchesDirectory(state) {
     return msg;
 }
 
+async function deductInventory(branchId, partNumber, quantity) {
+    if (!supabase) return false;
+    
+    const { data: inv } = await supabase
+        .from('inventory')
+        .select('id, stock')
+        .eq('branch_id', branchId)
+        .eq('part_number', partNumber)
+        .maybeSingle();
+        
+    if (inv && inv.stock >= quantity) {
+        const newStock = inv.stock - quantity;
+        const { error } = await supabase.from('inventory').update({ stock: newStock }).eq('id', inv.id);
+        if (error) console.error("Error deduciendo inventario:", error);
+        return !error;
+    }
+    return false;
+}
+
 module.exports = {
     supabase,
     getUser,
@@ -208,5 +227,6 @@ module.exports = {
     getClients,
     updateClientNumber,
     getAvailableStates,
-    getBranchesDirectory
+    getBranchesDirectory,
+    deductInventory
 };

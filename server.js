@@ -4,7 +4,7 @@ const xlsx = require('xlsx');
 const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber, getAvailableStates, getBranchesDirectory } = require('./db');
+const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber, getAvailableStates, getBranchesDirectory, deductInventory } = require('./db');
 
 // ==========================================
 // 1. CONFIGURACIÓN DEL SERVIDOR WEB (DASHBOARD)
@@ -395,6 +395,11 @@ client.on('message', async (message) => {
                 return;
             }
 
+            if (quantity > pendingItem.branch.stock) {
+                await client.sendMessage(phone, `⚠️ Lo sentimos, actualmente solo tenemos *${pendingItem.branch.stock}* pieza(s) disponible(s) en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${pendingItem.branch.stock}.`);
+                return;
+            }
+
             if (!userCarts[phone]) userCarts[phone] = [];
             userCarts[phone].push({ ...pendingItem, quantity });
             
@@ -515,9 +520,10 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
         }
     }
 
-    // Guardar en analíticas iterando sobre el carrito
+    // Guardar en analíticas y descontar inventario iterando sobre el carrito
     for (const item of cart) {
         await logAnalytics({ phone_number: phone, search_query: item.part.part_number, found: true, ordered: true, branch_id: item.branch.branch_id, state: currentState });
+        await deductInventory(item.branch.branch_id, item.part.part_number, item.quantity);
     }
 
     await updateUser(phone, { step: 'idle' });
