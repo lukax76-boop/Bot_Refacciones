@@ -183,6 +183,12 @@ function normalizeString(str) {
 }
 
 function getValidState(input) {
+    const inputClean = input.trim();
+    const idx = parseInt(inputClean);
+    if (!isNaN(idx) && idx > 0 && idx <= availableStatesCache.length) {
+        return availableStatesCache[idx - 1].original;
+    }
+
     let normalizedInput = normalizeString(input);
     
     // Mapeo de alias comunes a nombres completos
@@ -302,8 +308,19 @@ client.on('message', async (message) => {
             const validState = getValidState(text);
             
             if (!validState) {
-                console.log(`[ENVIANDO] a ${phone}: "⚠️ Estado no válido"`);
-                await client.sendMessage(phone, "⚠️ No logramos reconocer el estado.\n\nPor favor, escribe *solo el nombre* del estado desde donde nos contactas (Ej: *Jalisco*, *CDMX*, *Nuevo Leon*).");
+                console.log(`[ENVIANDO] a ${phone}: "⚠️ Estado no válido - Mostrando opciones"`);
+                
+                let stateOptionsMsg = "⚠️ No logramos reconocer ese estado.\n\nPor favor, responde con el *NÚMERO* o el *NOMBRE* de tu estado en esta lista:\n\n";
+                
+                if (availableStatesCache.length === 0) {
+                    stateOptionsMsg = "⚠️ Lo siento, en este momento nuestro sistema no cuenta con estados registrados.";
+                } else {
+                    availableStatesCache.forEach((s, idx) => {
+                        stateOptionsMsg += `[${idx + 1}] ${s.original}\n`;
+                    });
+                }
+                
+                await client.sendMessage(phone, stateOptionsMsg);
                 return;
             }
             
