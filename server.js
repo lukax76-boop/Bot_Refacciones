@@ -31,16 +31,62 @@ app.post('/api/upload', upload.single('excel'), async (req, res) => {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = xlsx.utils.sheet_to_json(sheet);
         
-        // Aquí iría la lógica pesada para procesar el array `data` e insertar en 
-        // Supabase (branches, parts, inventory). Por simplicidad, se omite 
-        // la implementación completa del bulk insert aquí para no saturar el código, 
-        // pero la ruta ya está lista para recibir el archivo estructurado.
+        const partsMap = new Map();
+        const inventoryToProcess = [];
+
+        data.forEach(row => {
+            const partNum = row['Numero_Parte']?.toString().trim();
+            const desc = row['Descripcion']?.toString().trim();
+            const price = parseFloat(row['Precio']);
+            const branchId = parseInt(row['ID_Sucursal']);
+            const stock = parseInt(row['Stock']);
+
+            if (!partNum || !desc || isNaN(price) || isNaN(branchId) || isNaN(stock)) return;
+
+            partsMap.set(partNum, {
+                part_number: partNum,
+                description: desc,
+                price: price
+            });
+
+            inventoryToProcess.push({
+                part_number: partNum,
+                branch_id: branchId,
+                stock: stock
+            });
+        });
+
+        const partsArray = Array.from(partsMap.values());
         
-        console.log(`Excel recibido con ${data.length} filas.`);
-        res.json({ success: true, message: `Excel procesado. ${data.length} registros.` });
+        // 1. Insertar o Actualizar Piezas (Batch)
+        if (partsArray.length > 0) {
+            const { error: errParts } = await supabase.from('parts').upsert(partsArray, { onConflict: 'part_number' });
+            if (errParts) throw errParts;
+        }
+
+        // 2. Procesar Inventario por Sucursal
+        let updatedInventory = 0;
+        for (const inv of inventoryToProcess) {
+            const { data: existing } = await supabase
+                .from('inventory')
+                .select('id')
+                .eq('part_number', inv.part_number)
+                .eq('branch_id', inv.branch_id)
+                .maybeSingle();
+
+            if (existing) {
+                await supabase.from('inventory').update({ stock: inv.stock }).eq('id', existing.id);
+            } else {
+                await supabase.from('inventory').insert(inv);
+            }
+            updatedInventory++;
+        }
+        
+        console.log(`Excel procesado. ${partsArray.length} piezas, ${updatedInventory} registros de inventario.`);
+        res.json({ success: true, message: `¡Inventario actualizado! ${partsArray.length} piezas y ${updatedInventory} registros de sucursales procesados exitosamente.` });
     } catch (error) {
         console.error("Error procesando Excel:", error);
-        res.status(500).json({ error: "Error procesando el archivo" });
+        res.status(500).json({ error: "Error interno al procesar el archivo de Excel." });
     }
 });
 
