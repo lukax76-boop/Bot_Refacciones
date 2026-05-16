@@ -279,7 +279,7 @@ client.on('message', async (message) => {
                 let optionCounter = 1;
                 
                 results.forEach((item) => {
-                    replyMsg += `*Pieza:* ${item.part.description} (No. ${item.part.part_number}) - $${item.part.price} MXN\n`;
+                    replyMsg += `*Pieza:* ${item.part.description} (Número de Parte: ${item.part.part_number}) - $${item.part.price} MXN\n`;
                     item.inventory.forEach(inv => {
                         replyMsg += `   [${optionCounter}] ${inv.branch_name} (${inv.stock} disp.)\n`;
                         optionsData[optionCounter] = { part: item.part, branch: inv };
@@ -374,7 +374,7 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
         const itemTotal = price * quantity;
         grandTotal += itemTotal;
         
-        clientTicket += `▪ ${quantity}x ${part.description} (No. ${part.part_number}) - $${itemTotal.toFixed(2)} MXN (Suc. ${branch.branch_name})\n`;
+        clientTicket += `▪ ${quantity}x ${part.description} (Número de Parte: ${part.part_number}) - $${itemTotal.toFixed(2)} MXN (Suc. ${branch.branch_name})\n`;
 
         const agentPhoneStr = branch.agent_phone || '8112418248';
         if (!ordersByAgent[agentPhoneStr]) ordersByAgent[agentPhoneStr] = [];
@@ -417,7 +417,7 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
             const price = item.part.price ? parseFloat(item.part.price) : 0;
             const itemTotal = price * item.quantity;
             agentTotal += itemTotal;
-            agentMsg += `- ${item.quantity}x ${item.part.description} (No. ${item.part.part_number})\n`;
+            agentMsg += `- ${item.quantity}x ${item.part.description} (Número de Parte: ${item.part.part_number})\n`;
         });
         
         agentMsg += `\n*Subtotal (con IVA):* $${agentTotal.toFixed(2)} MXN\n\n`;

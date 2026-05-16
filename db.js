@@ -147,7 +147,7 @@ async function getStats() {
 async function getClients() {
     if (!supabase) return [];
     const { data } = await supabase.from('users')
-        .select('phone_number, client_name, client_number')
+        .select('phone_number, client_name, client_number, real_phone')
         .not('client_name', 'is', null)
         .order('client_name', { ascending: true });
     return data || [];
