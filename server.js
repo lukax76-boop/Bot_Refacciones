@@ -179,7 +179,6 @@ client.on('message', async (message) => {
     
     // Comando para reiniciar la conversación en cualquier momento
     if (text.toLowerCase() === 'reiniciar' || text.toLowerCase() === 'menu') {
-    if (text.toLowerCase() === 'reiniciar' || text.toLowerCase() === 'menu') {
         await updateUser(phone, { step: 'idle' });
         console.log(`[ENVIANDO] a ${phone}: "🔄 Conversación reiniciada..."`);
         await client.sendMessage(phone, "🔄 *Conversación reiniciada*");
