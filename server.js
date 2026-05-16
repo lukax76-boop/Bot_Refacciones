@@ -213,7 +213,7 @@ client.on('message', async (message) => {
             if (sessionData && sessionData[optionIndex]) {
                 const selection = sessionData[optionIndex];
                 // En lugar de cerrar la venta, guardamos lo elegido y preguntamos cantidad
-                userSearchSessions[phone] = { part, branch };
+                userSearchSessions[phone] = { part: selection.part, branch: selection.branch };
                 await updateUser(phone, { step: 'asking_quantity' });
                 console.log(`[ENVIANDO] a ${phone}: "¿Cuántas piezas necesitas?"`);
                 await client.sendMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
@@ -259,14 +259,16 @@ async function processOrder(phone, sessionData, clientName, clientNumber, curren
     console.log(`[ENVIANDO] a ${phone}: "¡Excelente! 🎉"`);
     await client.sendMessage(phone, `¡Excelente! 🎉\nHas solicitado *${quantity} pieza(s)* de *${part.part_number}* en la sucursal *${branch.branch_name}*.\n\nEn breve un agente se comunicará contigo por este medio para confirmar tu pedido.`);
     
-    if (branch.agent_phone) {
+    const agentPhoneStr = branch.agent_phone || '8112418248';
+    
+    if (agentPhoneStr) {
         const cleanClientPhone = phone.replace('@c.us', '').replace('@lid', '');
         const agentMsg = `🔔 *NUEVO PEDIDO DESDE WHATSAPP BOT*\n\n*Cliente (Wa):* wa.me/${cleanClientPhone}\n*Facturar a:* ${clientName}\n*No. Cliente:* ${clientNumber}\n*Pieza:* ${part.description} (No. ${part.part_number})\n*Cantidad:* ${quantity}\n*Sucursal:* ${branch.branch_name}\n\n👉 Toca el enlace del cliente arriba para abrir el chat.`;
         
-        const formattedAgentPhone = branch.agent_phone.includes('@c.us') ? branch.agent_phone : `${branch.agent_phone}@c.us`;
+        const formattedAgentPhone = agentPhoneStr.includes('@c.us') ? agentPhoneStr : `${agentPhoneStr}@c.us`;
         try {
             await client.sendMessage(formattedAgentPhone, agentMsg);
-            console.log(`✅ [AGENTE NOTIFICADO]`);
+            console.log(`✅ [AGENTE NOTIFICADO a ${formattedAgentPhone}]`);
         } catch (error) {
             console.error(`⚠️ [ALERTA] No se pudo enviar mensaje al agente (${formattedAgentPhone}).`);
         }
