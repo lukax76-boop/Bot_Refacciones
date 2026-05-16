@@ -280,7 +280,7 @@ client.on('message', async (message) => {
                 let greeting = `¡Bienvenido al cotizador de refacciones! 🚗`;
                 if (user.client_name) greeting = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗`;
                 
-                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas.\n\n💡 _(Si deseas cambiar de estado, envía la palabra *ESTADO*)_`;
+                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
                 
                 console.log(`[ENVIANDO] a ${phone}: "Estado recordado: ${user.current_state}"`);
                 await client.sendMessage(phone, greeting);
@@ -291,7 +291,7 @@ client.on('message', async (message) => {
                     // Autodetectó la LADA
                     await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
                     console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... estado detectado: ${detectedState}"`);
-                    await client.sendMessage(phone, `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*, así que estoy haciendo las consultas para ese estado.\n\nDime qué refacción buscas.\n\n💡 _Para buscar en otro estado, envía la palabra *ESTADO*_`);
+                    await client.sendMessage(phone, `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*, así que estoy haciendo las consultas para ese estado.\n\nDime qué refacción buscas.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`);
                 } else {
                     // No pudo autodetectar
                     await updateUser(phone, { step: 'asking_state' });
