@@ -4,7 +4,7 @@ const xlsx = require('xlsx');
 const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber, getAvailableStates } = require('./db');
+const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber, getAvailableStates, getBranchesDirectory } = require('./db');
 
 // ==========================================
 // 1. CONFIGURACIÓN DEL SERVIDOR WEB (DASHBOARD)
@@ -247,6 +247,14 @@ client.on('message', async (message) => {
         delete userCarts[phone];
         delete userPendingItems[phone];
         // Se deja continuar hacia abajo (no hay return) para que el bloque 'idle' se encargue de saludar.
+    }
+
+    // Comando para solicitar información de sucursales
+    if (text.toUpperCase() === 'SUCURSALES' || text.toUpperCase() === 'DIRECCION' || text.toUpperCase() === 'DIRECCIÓN' || text.toUpperCase() === 'CONTACTO') {
+        const branchesInfo = await getBranchesDirectory(user.current_state);
+        console.log(`[ENVIANDO] a ${phone}: "Directorio de sucursales..."`);
+        await client.sendMessage(phone, branchesInfo);
+        return;
     }
 
     // Comando para cambiar de estado

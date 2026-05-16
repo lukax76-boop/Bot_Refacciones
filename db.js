@@ -172,6 +172,36 @@ async function getAvailableStates() {
     return states;
 }
 
+async function getBranchesDirectory(state) {
+    if (!supabase) return "⚠️ Error de conexión a la base de datos.";
+    
+    let query = supabase.from('branches').select('name, address, agent_phone, contact').order('state', { ascending: true });
+    
+    if (state) {
+        query = query.ilike('state', `%${state}%`);
+    }
+    
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) {
+        return "❌ No encontramos sucursales registradas en este momento" + (state ? ` para ${state}.` : ".");
+    }
+    
+    let msg = `🏪 *DIRECTORIO DE SUCURSALES${state ? ` EN ${state.toUpperCase()}` : ""}*\n\n`;
+    
+    data.forEach(b => {
+        msg += `📍 *${b.name}*\n`;
+        if (b.address) msg += `🗺️ Dirección: ${b.address}\n`;
+        if (b.contact) msg += `📞 Contacto: ${b.contact}\n`;
+        if (b.agent_phone) {
+            let phoneClean = b.agent_phone.replace('52', '').replace('521', '').trim();
+            msg += `📱 WhatsApp: ${phoneClean}\n`;
+        }
+        msg += `\n`;
+    });
+    
+    return msg;
+}
+
 module.exports = {
     supabase,
     getUser,
@@ -181,5 +211,6 @@ module.exports = {
     getStats,
     getClients,
     updateClientNumber,
-    getAvailableStates
+    getAvailableStates,
+    getBranchesDirectory
 };
