@@ -184,6 +184,20 @@
 
     <h1>Panel de Control Automotriz</h1>
 
+    <!-- ESTADO DEL BOT Y QR -->
+    <div class="glass-panel" style="width: 100%; max-width: 1000px; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; padding: 1.5rem 2rem;">
+        <div>
+            <h2 style="font-size: 1.2rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span id="botStatusDot" style="display:inline-block; width: 12px; height: 12px; border-radius: 50%; background: gray; box-shadow: 0 0 8px rgba(0,0,0,0.5);"></span>
+                Estado del Bot: <span id="botStatusText">Cargando...</span>
+            </h2>
+            <p id="botStatusDesc" style="font-size: 0.9rem; color: var(--text-muted);">Verificando la conexión con WhatsApp...</p>
+        </div>
+        <div id="qrContainer" style="display: none; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <img id="qrImage" src="" alt="Código QR WhatsApp" style="width: 150px; height: 150px; display: block;">
+        </div>
+    </div>
+
     <div class="container">
         
         <!-- ESTADÍSTICAS -->
@@ -384,9 +398,49 @@
             }
         }
 
+        async function loadBotStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                
+                const dot = document.getElementById('botStatusDot');
+                const text = document.getElementById('botStatusText');
+                const desc = document.getElementById('botStatusDesc');
+                const qrContainer = document.getElementById('qrContainer');
+                const qrImage = document.getElementById('qrImage');
+
+                if (data.status === 'connected') {
+                    dot.style.background = 'var(--success)';
+                    text.textContent = 'En Línea';
+                    desc.textContent = 'El bot está conectado y respondiendo mensajes.';
+                    qrContainer.style.display = 'none';
+                } else if (data.status === 'qr_ready') {
+                    dot.style.background = '#f59e0b'; // amber
+                    text.textContent = 'Esperando Escaneo';
+                    desc.textContent = 'Escanea el código QR desde tu celular para conectar el bot.';
+                    if (data.qr) {
+                        qrImage.src = data.qr;
+                        qrContainer.style.display = 'block';
+                    }
+                } else {
+                    dot.style.background = 'var(--danger)';
+                    text.textContent = 'Desconectado';
+                    desc.textContent = 'El bot no está en línea o se está inicializando...';
+                    qrContainer.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Error cargando estado del bot:', e);
+            }
+        }
+
+        loadBotStatus();
         loadStats();
         loadClients();
-        // Actualizar cada 10 segundos
+        
+        // Actualizar cada 3 segundos el estado del bot
+        setInterval(loadBotStatus, 3000);
+        
+        // Actualizar estadísticas cada 10 segundos
         setInterval(() => {
             loadStats();
             // No recargar clientes automáticamente para no borrar lo que el vendedor esté escribiendo

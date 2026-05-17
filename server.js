@@ -4,6 +4,7 @@ const xlsx = require('xlsx');
 const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const qrImage = require('qrcode');
 const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber, getAvailableStates, getBranchesDirectory, deductInventory } = require('./db');
 
 // ==========================================
@@ -187,6 +188,14 @@ app.post('/api/clients/:phone', async (req, res) => {
     res.json({ success });
 });
 
+let botStatus = 'disconnected';
+let currentQR = null;
+
+// API: Obtener Estado del Bot y QR
+app.get('/api/status', (req, res) => {
+    res.json({ status: botStatus, qr: currentQR });
+});
+
 app.listen(PORT, () => {
     console.log(`💻 Dashboard Web disponible en http://localhost:${PORT}`);
 });
@@ -202,15 +211,30 @@ const client = new Client({
     }
 });
 
-client.on('qr', (qr) => {
+client.on('qr', async (qr) => {
     console.log('\n======================================================');
     console.log('¡ESCANEA ESTE CÓDIGO QR PARA INICIAR EL BOT!');
     console.log('======================================================\n');
     qrcode.generate(qr, { small: true });
+    
+    botStatus = 'qr_ready';
+    try {
+        currentQR = await qrImage.toDataURL(qr);
+    } catch (err) {
+        console.error('Error generando imagen QR:', err);
+    }
 });
 
 client.on('ready', () => {
     console.log('✅ WhatsApp Bot conectado y listo.');
+    botStatus = 'connected';
+    currentQR = null;
+});
+
+client.on('disconnected', (reason) => {
+    console.log('❌ WhatsApp Bot desconectado:', reason);
+    botStatus = 'disconnected';
+    currentQR = null;
 });
 
 // Cache temporal para guardar resultados de búsqueda por usuario
