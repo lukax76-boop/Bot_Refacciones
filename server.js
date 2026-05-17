@@ -23,7 +23,7 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // API: Subir Excel de Inventario
-app.post('/api/upload', upload.single('excel'), async (req, res) => {
+app.post('/api/upload-inventory', upload.single('excel'), async (req, res) => {
     if (!req.file) return res.status(400).send('No se subió archivo.');
     
     try {
@@ -87,6 +87,90 @@ app.post('/api/upload', upload.single('excel'), async (req, res) => {
     } catch (error) {
         console.error("Error procesando Excel:", error);
         res.status(500).json({ error: "Error interno al procesar el archivo de Excel." });
+    }
+});
+
+// API: Subir Excel de Catálogo de Sucursales
+app.post('/api/upload-branches', upload.single('excel'), async (req, res) => {
+    if (!req.file) return res.status(400).send('No se subió archivo.');
+    
+    try {
+        const workbook = xlsx.readFile(req.file.path);
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = xlsx.utils.sheet_to_json(sheet);
+        
+        const branchesToProcess = [];
+
+        data.forEach(row => {
+            const id = parseInt(row['id']);
+            const name = row['name']?.toString().trim();
+            const state = row['state']?.toString().trim();
+            const address = row['address']?.toString().trim();
+            const agent_phone = row['agent_phone']?.toString().trim();
+            const contact = row['contact']?.toString().trim();
+
+            if (!name || !state || !agent_phone) return;
+
+            branchesToProcess.push({
+                ...(id ? { id } : {}),
+                name,
+                state,
+                address: address || null,
+                agent_phone,
+                contact: contact || null
+            });
+        });
+
+        if (branchesToProcess.length > 0) {
+            const { error } = await supabase.from('branches').upsert(branchesToProcess, { onConflict: 'id' });
+            if (error) throw error;
+        }
+
+        console.log(`Excel de Sucursales procesado. ${branchesToProcess.length} sucursales actualizadas.`);
+        res.json({ success: true, message: `¡Catálogo de sucursales actualizado! (${branchesToProcess.length} registros)` });
+    } catch (error) {
+        console.error("Error procesando Excel de Sucursales:", error);
+        res.status(500).json({ error: "Error al procesar el archivo de Sucursales." });
+    }
+});
+
+// API: Subir Excel de Catálogo de Refacciones (Solo piezas)
+app.post('/api/upload-parts', upload.single('excel'), async (req, res) => {
+    if (!req.file) return res.status(400).send('No se subió archivo.');
+    
+    try {
+        const workbook = xlsx.readFile(req.file.path);
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = xlsx.utils.sheet_to_json(sheet);
+        
+        const partsMap = new Map();
+
+        data.forEach(row => {
+            const partNum = row['Numero_Parte']?.toString().trim();
+            const desc = row['Descripcion']?.toString().trim();
+            const price = parseFloat(row['Precio']);
+
+            if (!partNum || !desc || isNaN(price)) return;
+
+            partsMap.set(partNum, {
+                part_number: partNum,
+                description: desc,
+                price: price
+            });
+        });
+
+        const partsArray = Array.from(partsMap.values());
+        
+        if (partsArray.length > 0) {
+            const { error } = await supabase.from('parts').upsert(partsArray, { onConflict: 'part_number' });
+            if (error) throw error;
+        }
+
+        console.log(`Excel de Refacciones procesado. ${partsArray.length} piezas actualizadas.`);
+        res.json({ success: true, message: `¡Catálogo de refacciones actualizado! (${partsArray.length} piezas)` });
+    } catch (error) {
+        console.error("Error procesando Excel de Refacciones:", error);
+        res.status(500).json({ error: "Error al procesar el archivo de Refacciones." });
     }
 });
 
