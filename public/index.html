@@ -422,6 +422,16 @@
                         qrImage.src = data.qr;
                         qrContainer.style.display = 'block';
                     }
+                } else if (data.status === 'authenticating' || data.status === 'loading') {
+                    dot.style.background = '#3b82f6'; // blue
+                    text.textContent = 'Sincronizando...';
+                    desc.textContent = 'El celular se vinculó. Descargando mensajes (puede tardar un minuto, ten paciencia)...';
+                    qrContainer.style.display = 'none';
+                } else if (data.status === 'auth_failure') {
+                    dot.style.background = 'var(--danger)';
+                    text.textContent = 'Error de Vinculación';
+                    desc.textContent = 'Falló la autenticación. Ve a Dispositivos Vinculados en tu celular, ciérralo y reinicia el servidor.';
+                    qrContainer.style.display = 'none';
                 } else {
                     dot.style.background = 'var(--danger)';
                     text.textContent = 'Desconectado';

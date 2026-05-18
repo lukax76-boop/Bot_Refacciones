@@ -225,6 +225,23 @@ client.on('qr', async (qr) => {
     }
 });
 
+client.on('authenticated', () => {
+    console.log('🔄 Autenticado correctamente. Sincronizando chats...');
+    botStatus = 'authenticating';
+    currentQR = null;
+});
+
+client.on('auth_failure', (msg) => {
+    console.error('❌ Fallo en la autenticación:', msg);
+    botStatus = 'auth_failure';
+    currentQR = null;
+});
+
+client.on('loading_screen', (percent, message) => {
+    console.log(`⏳ Sincronizando sesión de WhatsApp: ${percent}% - ${message}`);
+    botStatus = 'loading';
+});
+
 client.on('ready', () => {
     console.log('✅ WhatsApp Bot conectado y listo.');
     botStatus = 'connected';
@@ -515,7 +532,7 @@ client.on('message', async (message) => {
             delete userSearchSessions[phone];
             
             await updateUser(phone, { step: 'asking_more' });
-            await client.sendMessage(phone, `✅ ¡Pieza agregada a tu carrito! (Llevas ${userCarts[phone].length} artículo/s).\n\n¿Deseas agregar otra refacción a tu pedido?\nResponde *SI* para buscar otra, o *NO* para finalizar tu pedido.`);
+            await client.sendMessage(phone, `✅ ¡Pieza agregada a tu carrito! (Llevas ${userCarts[phone].length} artículo/s).\n\n¿Deseas agregar otra refacción a tu pedido?\nResponde *SI* para buscar otra, *NO* para finalizar tu pedido, o *CANCELAR* para borrar el carrito.`);
         }
         else if (step === 'asking_more') {
             const res = text.toUpperCase().trim();
@@ -529,8 +546,12 @@ client.on('message', async (message) => {
                     await updateUser(phone, { step: 'asking_name' });
                     await client.sendMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
                 }
+            } else if (res === 'CANCELAR') {
+                delete userCarts[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await client.sendMessage(phone, "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción buscas ahora:");
             } else {
-                await client.sendMessage(phone, "⚠️ Por favor responde *SI* o *NO*.");
+                await client.sendMessage(phone, "⚠️ Por favor responde *SI*, *NO* o *CANCELAR*.");
             }
         }
         else if (step === 'asking_name') {
