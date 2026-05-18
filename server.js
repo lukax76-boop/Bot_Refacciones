@@ -206,9 +206,10 @@ app.listen(PORT, () => {
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { 
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-extensions'],
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null
-    }
+    },
+    webVersionCache: { type: 'none' }
 });
 
 client.on('qr', async (qr) => {
@@ -508,9 +509,37 @@ client.on('message', async (message) => {
             }
         }
         else if (step === 'asking_quantity') {
+            if (text.toUpperCase().trim() === 'REGRESAR') {
+                const sessionData = userSearchSessions[phone];
+                if (!sessionData) {
+                    await client.sendMessage(phone, "⚠️ Tu búsqueda expiró. Por favor, escribe 'Reiniciar' e intenta de nuevo.");
+                    return;
+                }
+                
+                let replyMsg = `✅ Volviendo a los resultados de tu búsqueda:\n`;
+                let currentPartNumber = null;
+                const numOptions = Object.keys(sessionData).length;
+                
+                for (let i = 1; i <= numOptions; i++) {
+                    const val = sessionData[i];
+                    if (!val) continue;
+                    if (currentPartNumber !== val.part.part_number) {
+                        currentPartNumber = val.part.part_number;
+                        replyMsg += `\n📦 *${val.part.part_number}* - ${val.part.description} ($${val.part.price})\n`;
+                    }
+                    replyMsg += `   [${i}] ${val.branch.branch_name} (${val.branch.stock} disp.)\n`;
+                }
+                replyMsg += `\n👉 *Responde con el NÚMERO* de la sucursal para pedir la pieza, o envía "Reiniciar" para empezar desde cero.`;
+                
+                await updateUser(phone, { step: 'choosing_branch' });
+                delete userPendingItems[phone];
+                await client.sendMessage(phone, replyMsg);
+                return;
+            }
+
             const quantity = parseInt(text);
             if (isNaN(quantity) || quantity <= 0) {
-                await client.sendMessage(phone, "⚠️ Por favor ingresa un número válido (ej. 1, 2, 3).");
+                await client.sendMessage(phone, "⚠️ Por favor ingresa un número válido (ej. 1, 2, 3), o responde *REGRESAR* para ver las opciones.");
                 return;
             }
             
@@ -521,7 +550,7 @@ client.on('message', async (message) => {
             }
 
             if (quantity > pendingItem.branch.stock) {
-                await client.sendMessage(phone, `⚠️ Lo sentimos, actualmente solo tenemos *${pendingItem.branch.stock}* pieza(s) disponible(s) en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${pendingItem.branch.stock}.`);
+                await client.sendMessage(phone, `⚠️ Lo sentimos, actualmente solo tenemos *${pendingItem.branch.stock}* pieza(s) disponible(s) en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${pendingItem.branch.stock}, o responde *REGRESAR* para ver las opciones de sucursales nuevamente.`);
                 return;
             }
 
