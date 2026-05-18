@@ -384,15 +384,24 @@ client.on('message', async (message) => {
     }
     userLastActive[phone] = now;
     
-    // Comando para reiniciar la conversación en cualquier momento
-    if (text.toLowerCase() === 'reiniciar' || text.toLowerCase() === 'menu') {
+    // Comando para reiniciar la conversación o interceptar saludos
+    const lowerText = text.toLowerCase().trim();
+    const greetings = ['hola', 'hola!', 'ola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches', 'buenas', 'que tal', 'qué tal', 'reiniciar', 'menu', 'menú'];
+    
+    if (greetings.includes(lowerText)) {
         await updateUser(phone, { step: 'idle' });
-        console.log(`[ENVIANDO] a ${phone}: "🔄 Conversación reiniciada..."`);
-        await client.sendMessage(phone, "🔄 *Conversación reiniciada*");
+        console.log(`[ENVIANDO] a ${phone}: "🔄 Conversación reiniciada por saludo/comando..."`);
+        
+        // Si el usuario escribió explícitamente reiniciar o menú, le confirmamos
+        if (lowerText === 'reiniciar' || lowerText === 'menu' || lowerText === 'menú') {
+            await client.sendMessage(phone, "🔄 *Conversación reiniciada*");
+        }
+        
         step = 'idle';
         delete userCarts[phone];
         delete userPendingItems[phone];
-        // Se deja continuar hacia abajo (no hay return) para que el bloque 'idle' se encargue de saludar.
+        delete userSearchSessions[phone];
+        // Se deja continuar hacia abajo para que el bloque 'idle' se encargue de saludar.
     }
 
     // Comando para solicitar información de sucursales
