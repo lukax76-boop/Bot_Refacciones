@@ -484,27 +484,54 @@ client.on('message', async (message) => {
             } else {
                 await logAnalytics({ phone_number: phone, search_query: text, found: true, state: state });
                 
-                // Formatear respuesta
+                // Formatear respuesta y restar lo que ya está en el carrito
+                const cart = userCarts[phone] || [];
+                let validItemsFound = 0;
+                
                 let replyMsg = `✅ *Resultados encontrados en ${state}:*\n\n`;
                 let optionsData = {};
                 let optionCounter = 1;
                 
                 results.forEach((item) => {
-                    replyMsg += `*Pieza:* ${item.part.description} (Número de Parte: ${item.part.part_number}) - $${item.part.price} MXN\n`;
+                    let branchesWithStock = [];
+                    
                     item.inventory.forEach(inv => {
-                        replyMsg += `   [${optionCounter}] ${inv.branch_name} (${inv.stock} disp.)\n`;
-                        optionsData[optionCounter] = { part: item.part, branch: inv };
-                        optionCounter++;
+                        let cartQuantity = 0;
+                        for (const cartItem of cart) {
+                            if (cartItem.part.part_number === item.part.part_number && cartItem.branch.branch_id === inv.branch_id) {
+                                cartQuantity += cartItem.quantity;
+                            }
+                        }
+                        const actualStock = inv.stock - cartQuantity;
+                        
+                        if (actualStock > 0) {
+                            branchesWithStock.push({ ...inv, stock: actualStock });
+                        }
                     });
-                    replyMsg += `\n`;
+                    
+                    if (branchesWithStock.length > 0) {
+                        validItemsFound++;
+                        replyMsg += `📦 *${item.part.part_number}* - ${item.part.description} ($${item.part.price} MXN)\n`;
+                        branchesWithStock.forEach(inv => {
+                            replyMsg += `   [${optionCounter}] ${inv.branch_name} (${inv.stock} disp.)\n`;
+                            optionsData[optionCounter] = { part: item.part, branch: inv };
+                            optionCounter++;
+                        });
+                        replyMsg += `\n`;
+                    }
                 });
                 
-                replyMsg += `👉 *Responde con el NÚMERO* de la sucursal para pedir la pieza, o envía "Reiniciar" para nueva búsqueda.`;
-                
-                userSearchSessions[phone] = optionsData;
-                await updateUser(phone, { step: 'choosing_branch' });
-                console.log(`[ENVIANDO] a ${phone}: Resultados de búsqueda`);
-                await client.sendMessage(phone, replyMsg);
+                if (validItemsFound === 0) {
+                    console.log(`[ENVIANDO] a ${phone}: "❌ Sin stock suficiente (ya está en carrito)"`);
+                    await client.sendMessage(phone, `⚠️ La refacción "${text}" existe en ${state}, pero el inventario disponible ya lo tienes reservado en tu carrito actual.\n\nIntenta buscar otra pieza o envía "Reiniciar".`);
+                } else {
+                    replyMsg += `👉 *Responde con el NÚMERO* de la sucursal para pedir la pieza, o envía "Reiniciar" para nueva búsqueda.`;
+                    
+                    userSearchSessions[phone] = optionsData;
+                    await updateUser(phone, { step: 'choosing_branch' });
+                    console.log(`[ENVIANDO] a ${phone}: Resultados de búsqueda`);
+                    await client.sendMessage(phone, replyMsg);
+                }
             }
         }
         else if (step === 'choosing_branch') {
