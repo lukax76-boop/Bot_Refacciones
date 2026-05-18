@@ -260,6 +260,7 @@ client.on('disconnected', (reason) => {
 const userSearchSessions = {};
 const userCarts = {};
 const userPendingItems = {};
+const userLastActive = {}; // Rastreo de última interacción
 
 // Diccionario básico de LADAS (puedes añadir más después)
 const ladaMap = {
@@ -369,6 +370,19 @@ client.on('message', async (message) => {
     
     let step = user.step || 'idle';
     console.log(`👤 Usuario en paso: ${step}`);
+    
+    // Verificación de inactividad (10 minutos)
+    const now = Date.now();
+    const TIMEOUT_MS = 10 * 60 * 1000;
+    if (userLastActive[phone] && (now - userLastActive[phone]) > TIMEOUT_MS) {
+        console.log(`⏱️ [TIMEOUT] Sesión de ${phone} expirada por inactividad (>10 min). Reiniciando al menú inicial.`);
+        step = 'idle';
+        await updateUser(phone, { step: 'idle' });
+        delete userCarts[phone];
+        delete userPendingItems[phone];
+        delete userSearchSessions[phone];
+    }
+    userLastActive[phone] = now;
     
     // Comando para reiniciar la conversación en cualquier momento
     if (text.toLowerCase() === 'reiniciar' || text.toLowerCase() === 'menu') {
