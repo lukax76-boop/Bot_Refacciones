@@ -54,13 +54,46 @@ async function searchParts(queryText, state) {
     // Haremos la consulta directamente a la vista combinada si estuviera, 
     // pero aquí lo haremos con múltiples queries para asegurar que funciona sin necesidad de vistas complejas en Supabase.
     
+    let queryTrimmed = queryText.trim();
+    
+    // 1. Búsqueda exacta inicial
     let { data: parts, error: err1 } = await supabase
         .from('parts')
         .select('*')
-        .or(`part_number.ilike.%${queryText}%,description.ilike.%${queryText}%`)
+        .or(`part_number.ilike.%${queryTrimmed}%,description.ilike.%${queryTrimmed}%`)
         .limit(5);
 
-    if (err1 || !parts || parts.length === 0) return [];
+    // 2. Búsqueda inteligente (Fuzzy Search) si no hay resultados exactos
+    if ((err1 || !parts || parts.length === 0) && queryTrimmed.includes(' ')) {
+        const words = queryTrimmed.split(' ').filter(w => w.length > 2); // ignorar conectores cortos
+        if (words.length > 0) {
+            const orConditions = words.map(w => `description.ilike.%${w}%,part_number.ilike.%${w}%`).join(',');
+            let { data: fuzzyParts } = await supabase
+                .from('parts')
+                .select('*')
+                .or(orConditions);
+                
+            if (fuzzyParts && fuzzyParts.length > 0) {
+                // Algoritmo de puntuación (Score)
+                fuzzyParts.forEach(p => {
+                    p.score = 0;
+                    const descLower = (p.description || '').toLowerCase();
+                    const partLower = (p.part_number || '').toLowerCase();
+                    words.forEach(w => {
+                        const wordLower = w.toLowerCase();
+                        if (descLower.includes(wordLower)) p.score++;
+                        if (partLower.includes(wordLower)) p.score += 2; // Pesa más si coincide con el número de parte
+                    });
+                });
+                
+                // Ordenar por las más relevantes y tomar las 5 mejores
+                fuzzyParts.sort((a, b) => b.score - a.score);
+                parts = fuzzyParts.slice(0, 5);
+            }
+        }
+    }
+
+    if (!parts || parts.length === 0) return [];
 
     // Ahora buscamos inventario de estas partes en el estado específico
     const partNumbers = parts.map(p => p.part_number);
