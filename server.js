@@ -1,10 +1,10 @@
 const express = require('express');
+const axios = require('axios');
+const { OpenAI } = require('openai');
+const fs = require('fs');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const path = require('path');
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-const qrImage = require('qrcode');
 const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber, getAvailableStates, getBranchesDirectory, deductInventory } = require('./db');
 
 // ==========================================
@@ -201,68 +201,19 @@ app.listen(PORT, () => {
 });
 
 // ==========================================
-// 2. CONFIGURACIÓN DEL BOT DE WHATSAPP
 // ==========================================
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: { 
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-extensions'],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null
-    },
-    webVersionCache: { type: 'none' }
+// 2. CONFIGURACIÓN DEL BOT DE WHATSAPP (META CLOUD API)
+// ==========================================
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
 });
 
-client.on('qr', async (qr) => {
-    console.log('\n======================================================');
-    console.log('¡ESCANEA ESTE CÓDIGO QR PARA INICIAR EL BOT!');
-    console.log('======================================================\n');
-    qrcode.generate(qr, { small: true });
-    
-    botStatus = 'qr_ready';
-    try {
-        currentQR = await qrImage.toDataURL(qr);
-    } catch (err) {
-        console.error('Error generando imagen QR:', err);
-    }
-});
-
-client.on('authenticated', () => {
-    console.log('🔄 Autenticado correctamente. Sincronizando chats...');
-    botStatus = 'authenticating';
-    currentQR = null;
-});
-
-client.on('auth_failure', (msg) => {
-    console.error('❌ Fallo en la autenticación:', msg);
-    botStatus = 'auth_failure';
-    currentQR = null;
-});
-
-client.on('loading_screen', (percent, message) => {
-    console.log(`⏳ Sincronizando sesión de WhatsApp: ${percent}% - ${message}`);
-    botStatus = 'loading';
-});
-
-client.on('ready', () => {
-    console.log('✅ WhatsApp Bot conectado y listo.');
-    botStatus = 'connected';
-    currentQR = null;
-});
-
-client.on('disconnected', (reason) => {
-    console.log('❌ WhatsApp Bot desconectado:', reason);
-    botStatus = 'disconnected';
-    currentQR = null;
-});
-
-// Cache temporal para guardar resultados de búsqueda por usuario
-// para que puedan elegir la sucursal fácilmente.
+// Cache temporal
 const userSearchSessions = {};
 const userCarts = {};
 const userPendingItems = {};
-const userLastActive = {}; // Rastreo de última interacción
+const userLastActive = {}; 
 
-// Diccionario básico de LADAS (puedes añadir más después)
 const ladaMap = {
     '33': 'Jalisco', '81': 'Nuevo León', '55': 'Ciudad de México', '56': 'Ciudad de México',
     '322': 'Jalisco', '477': 'Guanajuato', '442': 'Querétaro', '222': 'Puebla',
@@ -270,8 +221,7 @@ const ladaMap = {
 };
 
 function detectStateFromPhone(phone) {
-    if (phone.includes('@lid')) return null;
-    let clean = phone.replace('@c.us', '');
+    let clean = phone;
     if (clean.startsWith('521')) clean = clean.substring(3);
     else if (clean.startsWith('52')) clean = clean.substring(2);
     else return null;
@@ -283,12 +233,7 @@ function detectStateFromPhone(phone) {
     return null;
 }
 
-// ==========================================
-// ==========================================
-// VALIDACIÓN DINÁMICA DE ESTADOS
-// ==========================================
 let availableStatesCache = [];
-
 async function refreshAvailableStates() {
     try {
         const states = await getAvailableStates();
@@ -300,13 +245,11 @@ async function refreshAvailableStates() {
         console.error("Error refrescando estados:", e);
     }
 }
-
-// Refrescar al inicio y cada hora (3600000 ms)
 refreshAvailableStates();
 setInterval(refreshAvailableStates, 3600000);
 
 function normalizeString(str) {
-    return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    return str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 }
 
 function getValidState(input) {
@@ -315,10 +258,7 @@ function getValidState(input) {
     if (!isNaN(idx) && idx > 0 && idx <= availableStatesCache.length) {
         return availableStatesCache[idx - 1].original;
     }
-
     let normalizedInput = normalizeString(input);
-    
-    // Mapeo de alias comunes a nombres completos
     if (normalizedInput === 'cdmx' || normalizedInput === 'df') normalizedInput = 'ciudad de mexico';
     else if (normalizedInput === 'edomex' || normalizedInput === 'mexico') normalizedInput = 'estado de mexico';
     else if (normalizedInput === 'nl') normalizedInput = 'nuevo leon';
@@ -329,53 +269,153 @@ function getValidState(input) {
         const regex = new RegExp(`\\b${normalizedInput}\\b`);
         return regex.test(s.normalized) || s.normalized.includes(normalizedInput);
     });
-    
     return found ? found.original : null;
 }
 
-client.on('message', async (message) => {
-    if (message.from.includes('@g.us') || message.isStatus) return;
-    
-    const phone = message.from;
-    const text = message.body.trim();
-    
-    console.log(`\n📩 [MENSAJE RECIBIDO] De: ${phone} | Texto: "${text}"`);
-    console.log(`🔍 [DEBUG] author: ${message.author}, participant: ${message.id ? message.id.participant : 'N/A'}, remote: ${message.id ? message.id.remote : 'N/A'}`);
-    
-    let realPhone = null;
+// Helper: Enviar mensaje mediante Meta Cloud API
+async function sendMetaMessage(phone, content, type = 'text', interactiveOptions = null) {
+    const token = process.env.META_ACCESS_TOKEN;
+    const phoneId = process.env.META_PHONE_NUMBER_ID;
+    if(!token || !phoneId) {
+        console.error("Faltan META_ACCESS_TOKEN o META_PHONE_NUMBER_ID");
+        return;
+    }
+
+    let to = phone.replace('@c.us', '').replace('@lid', '').replace(/\+/g, '').trim();
+    if (to.length === 10) to = '52' + to;
+
+    let data = {
+        messaging_product: "whatsapp",
+        to: to,
+        type: type
+    };
+
+    if (type === 'text') {
+        data.text = { body: content };
+    } else if (type === 'interactive') {
+        data.interactive = interactiveOptions;
+    }
+
     try {
-        const contact = await message.getContact();
-        console.log(`🔍 [DEBUG CONTACT] number: ${contact.number}, id._serialized: ${contact.id ? contact.id._serialized : 'N/A'}`);
-        if (contact && contact.id && contact.id._serialized) {
-            realPhone = contact.id._serialized.replace('@c.us', '').replace('@lid', '');
-        } else if (contact && contact.number) {
-            realPhone = contact.number;
+        await axios.post(`https://graph.facebook.com/v19.0/${phoneId}/messages`, data, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        });
+    } catch (e) {
+        console.error("Error sending Meta Message:", e.response?.data || e.message);
+    }
+}
+
+// Helper: Transcribir Audio con OpenAI Whisper
+async function transcribeAudio(audioId) {
+    try {
+        const token = process.env.META_ACCESS_TOKEN;
+        const mediaRes = await axios.get(`https://graph.facebook.com/v19.0/${audioId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const mediaUrl = mediaRes.data.url;
+        
+        const audioRes = await axios.get(mediaUrl, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            responseType: 'stream'
+        });
+        
+        const tempPath = path.join(__dirname, `temp_${Date.now()}.ogg`);
+        const writer = fs.createWriteStream(tempPath);
+        audioRes.data.pipe(writer);
+        await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+        
+        console.log("Audio descargado, enviando a Whisper...");
+        const transcription = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(tempPath),
+            model: "whisper-1",
+            language: "es"
+        });
+        
+        fs.unlinkSync(tempPath);
+        return transcription.text;
+    } catch(e) {
+        console.error("Error transcribing audio:", e.response?.data || e.message);
+        return null;
+    }
+}
+
+// WEBHOOK DE META CLOUD API
+app.get('/webhook', (req, res) => {
+    const verify_token = process.env.META_WEBHOOK_VERIFY_TOKEN;
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode && token) {
+        if (mode === 'subscribe' && token === verify_token) {
+            console.log('WEBHOOK VERIFIED');
+            res.status(200).send(challenge);
+        } else {
+            res.sendStatus(403);
         }
-        if (realPhone && realPhone.startsWith('521') && realPhone.length === 13) {
-            realPhone = '52' + realPhone.substring(3);
+    }
+});
+
+app.post('/webhook', async (req, res) => {
+    res.sendStatus(200); // Responder OK inmediatamente a Meta
+    
+    const body = req.body;
+    if (body.object) {
+        if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages && body.entry[0].changes[0].value.messages[0]) {
+            const message = body.entry[0].changes[0].value.messages[0];
+            const contact = body.entry[0].changes[0].value.contacts[0];
+            
+            const phone = message.from; 
+            const senderName = contact ? contact.profile.name : 'Usuario';
+            
+            let text = "";
+            let audioId = null;
+            
+            if (message.type === 'text') {
+                text = message.text.body;
+            } else if (message.type === 'interactive') {
+                if (message.interactive.type === 'button_reply') {
+                    text = message.interactive.button_reply.id;
+                } else if (message.interactive.type === 'list_reply') {
+                    text = message.interactive.list_reply.id;
+                }
+            } else if (message.type === 'audio') {
+                audioId = message.audio.id;
+                text = await transcribeAudio(audioId);
+                if (!text) {
+                    await sendMetaMessage(phone, "⚠️ Lo siento, no pude entender el audio. ¿Podrías escribir tu mensaje?");
+                    return;
+                }
+                console.log(`[AUDIO TRANSCRITO]: "${text}"`);
+            } else {
+                return; // Ignorar imagenes, stickers, etc.
+            }
+            
+            if(text) {
+                await processMessageLogic(phone, text, senderName);
+            }
         }
-    } catch(e) {}
+    }
+});
+
+async function processMessageLogic(phone, text, senderName) {
+    console.log(`\n📩 [MENSAJE RECIBIDO] De: ${phone} | Texto: "${text}"`);
     
     const user = await getUser(phone);
     if (!user) {
-        console.log(`❌ [ERROR] No se pudo obtener ni crear el usuario en la base de datos para ${phone}. Verifica tu conexión a Supabase y que las tablas existan.`);
-        return; // Error de BD
-    }
-    
-    // Guardar el número real en la base de datos para mostrarlo correctamente en el Dashboard
-    if (realPhone && user.real_phone !== realPhone) {
-        await updateUser(phone, { real_phone: realPhone });
-        user.real_phone = realPhone;
+        console.log(`❌ [ERROR] Base de datos falló.`);
+        return; 
     }
     
     let step = user.step || 'idle';
-    console.log(`👤 Usuario en paso: ${step}`);
     
-    // Verificación de inactividad (10 minutos)
+    // Verificación de inactividad
     const now = Date.now();
-    const TIMEOUT_MS = 10 * 60 * 1000;
-    if (userLastActive[phone] && (now - userLastActive[phone]) > TIMEOUT_MS) {
-        console.log(`⏱️ [TIMEOUT] Sesión de ${phone} expirada por inactividad (>10 min). Reiniciando al menú inicial.`);
+    if (userLastActive[phone] && (now - userLastActive[phone]) > 600000) {
+        console.log(`⏱️ Sesión expirada.`);
         step = 'idle';
         await updateUser(phone, { step: 'idle' });
         delete userCarts[phone];
@@ -384,145 +424,121 @@ client.on('message', async (message) => {
     }
     userLastActive[phone] = now;
     
-    // Comando para reiniciar la conversación o interceptar saludos
     const lowerText = text.toLowerCase().trim();
     const greetings = ['hola', 'hola!', 'ola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches', 'buenas', 'que tal', 'qué tal', 'reiniciar', 'menu', 'menú'];
     
     if (greetings.includes(lowerText)) {
         await updateUser(phone, { step: 'idle' });
-        console.log(`[ENVIANDO] a ${phone}: "🔄 Conversación reiniciada por saludo/comando..."`);
-        
-        // Si el usuario escribió explícitamente reiniciar o menú, le confirmamos
         if (lowerText === 'reiniciar' || lowerText === 'menu' || lowerText === 'menú') {
-            await client.sendMessage(phone, "🔄 *Conversación reiniciada*");
+            await sendMetaMessage(phone, "🔄 *Conversación reiniciada*");
         }
-        
         step = 'idle';
         delete userCarts[phone];
         delete userPendingItems[phone];
         delete userSearchSessions[phone];
-        // Se deja continuar hacia abajo para que el bloque 'idle' se encargue de saludar.
     }
 
-    // Comando para solicitar información de sucursales
     if (text.toUpperCase() === 'SUCURSALES' || text.toUpperCase() === 'DIRECCION' || text.toUpperCase() === 'DIRECCIÓN' || text.toUpperCase() === 'CONTACTO') {
         const branchesInfo = await getBranchesDirectory(user.current_state);
-        console.log(`[ENVIANDO] a ${phone}: "Directorio de sucursales..."`);
-        await client.sendMessage(phone, branchesInfo);
+        await sendMetaMessage(phone, branchesInfo);
         return;
     }
 
-    // Comando para cambiar de estado
     if (text.toUpperCase() === 'ESTADO') {
         await updateUser(phone, { step: 'asking_state', current_state: null });
-        console.log(`[ENVIANDO] a ${phone}: "Cambiando de estado..."`);
-        await client.sendMessage(phone, "Cambiando de estado... 📍\n¿En qué *Estado de la República* deseas hacer la consulta ahora?");
+        await sendMetaMessage(phone, "Cambiando de estado... 📍\n¿En qué *Estado de la República* deseas hacer la consulta ahora?");
         return;
     }
 
     try {
         if (step === 'idle') {
             if (user.current_state) {
-                // Ya tiene un estado recordado por compras/búsquedas previas
                 await updateUser(phone, { step: 'asking_part' });
-                
                 let greeting = `¡Bienvenido al cotizador de refacciones! 🚗`;
                 if (user.client_name) greeting = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗`;
-                
-                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
-                
-                console.log(`[ENVIANDO] a ${phone}: "Estado recordado: ${user.current_state}"`);
-                await client.sendMessage(phone, greeting);
+                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas (puedes enviar un mensaje de voz o texto).\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
+                await sendMetaMessage(phone, greeting);
             } else {
                 const detectedState = detectStateFromPhone(phone);
-                
                 if (detectedState) {
-                    // Autodetectó la LADA
                     await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
-                    console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... estado detectado: ${detectedState}"`);
-                    await client.sendMessage(phone, `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*, así que estoy haciendo las consultas para ese estado.\n\nDime qué refacción buscas.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`);
+                    await sendMetaMessage(phone, `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nDime qué refacción buscas (audio o texto).\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`);
                 } else {
-                    // No pudo autodetectar
                     await updateUser(phone, { step: 'asking_state' });
-                    console.log(`[ENVIANDO] a ${phone}: "¡Bienvenido... ¿Estado?"`);
                     if (user.client_name && user.client_number) {
-                        await client.sendMessage(phone, `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy? (Ej: Jalisco, CDMX, Nuevo León)`);
+                        await sendMetaMessage(phone, `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy?`);
                     } else {
-                        await client.sendMessage(phone, "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas? (Ej: Jalisco, Nuevo León, CDMX)");
+                        await sendMetaMessage(phone, "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas?");
                     }
                 }
             }
         } 
         else if (step === 'asking_state') {
             const validState = getValidState(text);
-            
             if (!validState) {
-                console.log(`[ENVIANDO] a ${phone}: "⚠️ Estado no válido - Mostrando opciones"`);
-                
                 let stateOptionsMsg = "⚠️ No logramos reconocer ese estado.\n\nPor favor, responde con el *NÚMERO* o el *NOMBRE* de tu estado en esta lista:\n\n";
-                
-                if (availableStatesCache.length === 0) {
-                    stateOptionsMsg = "⚠️ Lo siento, en este momento nuestro sistema no cuenta con estados registrados.";
-                } else {
-                    availableStatesCache.forEach((s, idx) => {
-                        stateOptionsMsg += `[${idx + 1}] ${s.original}\n`;
-                    });
-                }
-                
-                await client.sendMessage(phone, stateOptionsMsg);
+                if (availableStatesCache.length === 0) stateOptionsMsg = "⚠️ Lo siento, no hay estados.";
+                else availableStatesCache.forEach((s, idx) => stateOptionsMsg += `[${idx + 1}] ${s.original}\n`);
+                await sendMetaMessage(phone, stateOptionsMsg);
                 return;
             }
-            
-            // Guardar estado validado y preguntar pieza
             await updateUser(phone, { current_state: validState, step: 'asking_part' });
-            console.log(`[ENVIANDO] a ${phone}: "¡Perfecto! Buscaremos en ${validState}..."`);
-            await client.sendMessage(phone, `¡Perfecto! Buscaremos en *${validState}*.\n\nDime qué refacción buscas.\n\n💡 _Para buscar en otro estado en cualquier momento, envía la palabra *ESTADO*_`);
+            await sendMetaMessage(phone, `¡Perfecto! Buscaremos en *${validState}*.\n\nDime qué refacción buscas.\n\n💡 _Para cambiar envía *ESTADO*_`);
         }
         else if (step === 'asking_part') {
-            // Comando para terminar si ya tienen carrito
             if (text.toUpperCase().trim() === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
-                if (user.client_name && user.client_number) {
-                    await processOrder(phone, user.client_name, user.client_number, user.current_state, message);
-                } else {
+                if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
+                else {
                     await updateUser(phone, { step: 'asking_name' });
-                    await client.sendMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+                    await sendMetaMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
                 }
                 return;
             }
 
-            // Buscar pieza
+            const matchedState = getValidState(text);
+            if (matchedState) {
+                await updateUser(phone, { current_state: matchedState, step: 'asking_part' });
+                user.current_state = matchedState;
+                await sendMetaMessage(phone, `📍 Detecté que mencionaste el estado *${matchedState}*.\nHe actualizado tu zona de búsqueda a este estado.\n\nAhora sí, dime ¿qué refacción buscas?`);
+                return;
+            }
+
+            if (text.length > 3) {
+                const cleanText = text.trim();
+                const { data: branchMatch } = await supabase.from('branches').select('name, state').ilike('name', `%${cleanText}%`).limit(1);
+                if (branchMatch && branchMatch.length > 0) {
+                    const matchedBranchState = branchMatch[0].state;
+                    await updateUser(phone, { current_state: matchedBranchState, step: 'asking_part' });
+                    user.current_state = matchedBranchState;
+                    await sendMetaMessage(phone, `🏪 Detecté que mencionaste la sucursal *${branchMatch[0].name}* (*${matchedBranchState}*).\nHe actualizado tu zona.\n\nAhora sí, dime ¿qué refacción buscas?`);
+                    return;
+                }
+            }
+
             const state = user.current_state;
-            console.log(`[ENVIANDO] a ${phone}: "🔍 Buscando..."`);
-            await client.sendMessage(phone, "🔍 Buscando en nuestro inventario...");
-            
+            await sendMetaMessage(phone, "🔍 Buscando en nuestro inventario...");
             const results = await searchParts(text, state);
             
             if (results.length === 0) {
                 await logAnalytics({ phone_number: phone, search_query: text, found: false, state: state });
-                console.log(`[ENVIANDO] a ${phone}: "❌ No encontrado"`);
-                
                 let fallbackMsg = `❌ Lo siento, no pudimos encontrar "${text}" en sucursales de ${state}.\n\nSimplemente escribe el nombre de otra pieza para buscar.`;
-                if (userCarts[phone] && userCarts[phone].length > 0) {
-                    fallbackMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar tu pedido actual, o *REINICIAR* para vaciar el carrito y empezar desde cero).*`;
-                } else {
-                    fallbackMsg += `\n\n*(Opcional: Envía la palabra ESTADO si deseas cambiar la zona de búsqueda, o *REINICIAR* para volver al menú principal).*`;
-                }
-                
-                await client.sendMessage(phone, fallbackMsg);
+                if (userCarts[phone] && userCarts[phone].length > 0) fallbackMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar pedido, o *REINICIAR* para vaciar el carrito).*`;
+                else fallbackMsg += `\n\n*(Opcional: Envía ESTADO para cambiar la zona, o *REINICIAR* para volver al menú).*`;
+                await sendMetaMessage(phone, fallbackMsg);
             } else {
                 await logAnalytics({ phone_number: phone, search_query: text, found: true, state: state });
-                
-                // Formatear respuesta y restar lo que ya está en el carrito
                 const cart = userCarts[phone] || [];
                 let validItemsFound = 0;
                 
-                let replyMsg = `✅ *Resultados encontrados en ${state}:*\n\n`;
                 let optionsData = {};
                 let optionCounter = 1;
                 
+                let sections = [{ title: "Resultados Disponibles", rows: [] }];
+                
+                let textBody = `✅ *Resultados encontrados en ${state}:*\n\n`;
+                
                 results.forEach((item) => {
                     let branchesWithStock = [];
-                    
                     item.inventory.forEach(inv => {
                         let cartQuantity = 0;
                         for (const cartItem of cart) {
@@ -531,62 +547,65 @@ client.on('message', async (message) => {
                             }
                         }
                         const actualStock = inv.stock - cartQuantity;
-                        
-                        if (actualStock > 0) {
-                            branchesWithStock.push({ ...inv, stock: actualStock });
-                        }
+                        if (actualStock > 0) branchesWithStock.push({ ...inv, stock: actualStock });
                     });
                     
                     if (branchesWithStock.length > 0) {
                         validItemsFound++;
-                        replyMsg += `📦 *${item.part.part_number}* - ${item.part.description} ($${item.part.price} MXN)\n`;
+                        textBody += `📦 *${item.part.part_number}* - ${item.part.description} ($${item.part.price})\n`;
                         branchesWithStock.forEach(inv => {
-                            replyMsg += `   [${optionCounter}] ${inv.branch_name} (${inv.stock} disp.)\n`;
                             optionsData[optionCounter] = { part: item.part, branch: inv };
+                            sections[0].rows.push({
+                                id: optionCounter.toString(),
+                                title: `${inv.branch_name} (${inv.stock})`,
+                                description: `${item.part.part_number} - $${item.part.price}`
+                            });
                             optionCounter++;
                         });
-                        replyMsg += `\n`;
                     }
                 });
                 
                 if (validItemsFound === 0) {
-                    console.log(`[ENVIANDO] a ${phone}: "❌ Sin stock suficiente (ya está en carrito)"`);
                     let alertMsg = `⚠️ La refacción "${text}" existe en ${state}, pero el inventario disponible ya lo tienes reservado en tu carrito actual.\n\nEscribe el nombre de otra pieza para seguir buscando.`;
-                    if (userCarts[phone] && userCarts[phone].length > 0) {
-                        alertMsg += `\n\n*(Opcional: Envía la palabra *FINALIZAR* para proceder a confirmar tu pedido).*`;
-                    }
-                    await client.sendMessage(phone, alertMsg);
+                    if (userCarts[phone] && userCarts[phone].length > 0) alertMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar tu pedido).*`;
+                    await sendMetaMessage(phone, alertMsg);
                 } else {
-                    replyMsg += `👉 *Responde con el NÚMERO* de la sucursal para pedir la pieza.`;
-                    replyMsg += `\n(Para buscar una pieza diferente, escribe *OTRA*).`;
-                    if (userCarts[phone] && userCarts[phone].length > 0) {
-                        replyMsg += `\n(Opcional: Envía *FINALIZAR* para ignorar esta búsqueda y confirmar tu pedido actual).`;
-                    }
-                    
+                    sections[0].rows.push({ id: "OTRA", title: "Buscar otra pieza" });
+                    if (cart.length > 0) sections[0].rows.push({ id: "FINALIZAR", title: "Finalizar pedido actual" });
+                    sections[0].rows.push({ id: "REINICIAR", title: "Borrar carrito y reiniciar" });
+
                     userSearchSessions[phone] = optionsData;
                     await updateUser(phone, { step: 'choosing_branch' });
-                    console.log(`[ENVIANDO] a ${phone}: Resultados de búsqueda`);
-                    await client.sendMessage(phone, replyMsg);
+                    
+                    // Asegurarse de no exceder el límite de 10 rows de WhatsApp
+                    if(sections[0].rows.length > 10) {
+                        sections[0].rows = sections[0].rows.slice(0, 10);
+                    }
+                    
+                    await sendMetaMessage(phone, null, 'interactive', {
+                        type: "list",
+                        header: { type: "text", text: `🔎 Resultados de búsqueda` },
+                        body: { text: textBody + "\nSelecciona una opción de la lista:" },
+                        footer: { text: "Selecciona una sucursal" },
+                        action: { button: "Ver Opciones", sections: sections }
+                    });
                 }
             }
         }
         else if (step === 'choosing_branch') {
             if (text.toUpperCase().trim() === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
                 delete userSearchSessions[phone];
-                if (user.client_name && user.client_number) {
-                    await processOrder(phone, user.client_name, user.client_number, user.current_state, message);
-                } else {
+                if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
+                else {
                     await updateUser(phone, { step: 'asking_name' });
-                    await client.sendMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+                    await sendMetaMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
                 }
                 return;
             }
-            
             if (text.toUpperCase().trim() === 'OTRA' || text.toUpperCase().trim() === 'OTRO') {
                 delete userSearchSessions[phone];
                 await updateUser(phone, { step: 'asking_part' });
-                console.log(`[ENVIANDO] a ${phone}: "Nueva búsqueda solicitada desde sucursales"`);
-                await client.sendMessage(phone, "Dime qué *otra refacción* buscas:");
+                await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
                 return;
             }
 
@@ -597,56 +616,39 @@ client.on('message', async (message) => {
                 const selection = sessionData[optionIndex];
                 userPendingItems[phone] = { part: selection.part, branch: selection.branch };
                 await updateUser(phone, { step: 'asking_quantity' });
-                console.log(`[ENVIANDO] a ${phone}: "¿Cuántas piezas necesitas?"`);
-                await client.sendMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
+                await sendMetaMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
             } else {
-                console.log(`[ENVIANDO] a ${phone}: "⚠️ Opción inválida"`);
-                await client.sendMessage(phone, "⚠️ Opción inválida.\n\n👉 Responde con el *NÚMERO* de la lista.\n👉 Escribe *OTRA* para buscar algo distinto sin perder tu carrito.\n👉 Escribe *REINICIAR* para borrar todo y empezar de cero.");
+                await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o envía *REINICIAR*.");
             }
         }
         else if (step === 'asking_quantity') {
             if (text.toUpperCase().trim() === 'REGRESAR') {
                 const sessionData = userSearchSessions[phone];
                 if (!sessionData) {
-                    await client.sendMessage(phone, "⚠️ Tu búsqueda expiró. Por favor, escribe 'Reiniciar' e intenta de nuevo.");
+                    await sendMetaMessage(phone, "⚠️ Tu búsqueda expiró. Por favor, escribe 'Reiniciar' e intenta de nuevo.");
                     return;
                 }
-                
-                let replyMsg = `✅ Volviendo a los resultados de tu búsqueda:\n`;
-                let currentPartNumber = null;
-                const numOptions = Object.keys(sessionData).length;
-                
-                for (let i = 1; i <= numOptions; i++) {
-                    const val = sessionData[i];
-                    if (!val) continue;
-                    if (currentPartNumber !== val.part.part_number) {
-                        currentPartNumber = val.part.part_number;
-                        replyMsg += `\n📦 *${val.part.part_number}* - ${val.part.description} ($${val.part.price})\n`;
-                    }
-                    replyMsg += `   [${i}] ${val.branch.branch_name} (${val.branch.stock} disp.)\n`;
-                }
-                replyMsg += `\n👉 *Responde con el NÚMERO* de la sucursal para pedir la pieza, o envía "Reiniciar" para empezar desde cero.`;
-                
+                // Aquí en el futuro podríamos enviar la lista de nuevo
                 await updateUser(phone, { step: 'choosing_branch' });
                 delete userPendingItems[phone];
-                await client.sendMessage(phone, replyMsg);
+                await sendMetaMessage(phone, `✅ Regresando a opciones previas... Selecciona de la lista de arriba nuevamente o envía *REINICIAR*.`);
                 return;
             }
 
             const quantity = parseInt(text);
             if (isNaN(quantity) || quantity <= 0) {
-                await client.sendMessage(phone, "⚠️ Por favor ingresa un número válido (ej. 1, 2, 3), o responde *REGRESAR* para ver las opciones.");
+                await sendMetaMessage(phone, "⚠️ Por favor ingresa un número válido (ej. 1, 2, 3), o responde *REGRESAR* para ver las opciones.");
                 return;
             }
             
             const pendingItem = userPendingItems[phone];
             if (!pendingItem) {
-                await client.sendMessage(phone, "⚠️ Hubo un error recuperando tu pieza. Por favor, escribe 'Reiniciar'.");
+                await sendMetaMessage(phone, "⚠️ Hubo un error recuperando tu pieza. Por favor, escribe 'Reiniciar'.");
                 return;
             }
 
             if (quantity > pendingItem.branch.stock) {
-                await client.sendMessage(phone, `⚠️ Lo sentimos, actualmente solo tenemos *${pendingItem.branch.stock}* pieza(s) disponible(s) en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${pendingItem.branch.stock}, o responde *REGRESAR* para ver las opciones de sucursales nuevamente.`);
+                await sendMetaMessage(phone, `⚠️ Lo sentimos, actualmente solo tenemos *${pendingItem.branch.stock}* pieza(s) disponible(s) en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${pendingItem.branch.stock}, o responde *REGRESAR*.`);
                 return;
             }
 
@@ -657,40 +659,51 @@ client.on('message', async (message) => {
             delete userSearchSessions[phone];
             
             await updateUser(phone, { step: 'asking_more' });
-            await client.sendMessage(phone, `✅ ¡Pieza agregada a tu carrito! (Llevas ${userCarts[phone].length} artículo/s).\n\n¿Deseas agregar otra refacción a tu pedido?\nResponde *SI* para buscar otra, *NO* para finalizar tu pedido, o *CANCELAR* para borrar el carrito.`);
+            
+            // BOTONES INTERACTIVOS TOUCH
+            await sendMetaMessage(phone, null, 'interactive', {
+                type: "button",
+                body: { text: `✅ ¡Pieza agregada a tu carrito! (Llevas ${userCarts[phone].length} artículo/s).\n\n¿Deseas agregar otra refacción a tu pedido?` },
+                action: {
+                    buttons: [
+                        { type: "reply", reply: { id: "SI", title: "SÍ, Buscar Otra" } },
+                        { type: "reply", reply: { id: "FINALIZAR", title: "FINALIZAR Pedido" } },
+                        { type: "reply", reply: { id: "CANCELAR", title: "CANCELAR Todo" } }
+                    ]
+                }
+            });
         }
         else if (step === 'asking_more') {
             const res = text.toUpperCase().trim();
             if (res === 'SI' || res === 'SÍ' || res === 'S') {
                 await updateUser(phone, { step: 'asking_part' });
-                await client.sendMessage(phone, "Dime qué *otra refacción* buscas:\n\n💡 _(Si deseas cambiar de zona, envía la palabra ESTADO)_");
-            } else if (res === 'NO' || res === 'N') {
+                await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
+            } else if (res === 'NO' || res === 'N' || res === 'FINALIZAR') {
                 if (user.client_name && user.client_number) {
-                    await processOrder(phone, user.client_name, user.client_number, user.current_state, message);
+                    await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 } else {
                     await updateUser(phone, { step: 'asking_name' });
-                    await client.sendMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+                    await sendMetaMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
                 }
             } else if (res === 'CANCELAR') {
                 delete userCarts[phone];
                 await updateUser(phone, { step: 'asking_part' });
-                await client.sendMessage(phone, "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción buscas ahora:");
+                await sendMetaMessage(phone, "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción buscas ahora:");
             } else {
-                await client.sendMessage(phone, "⚠️ Por favor responde *SI*, *NO* o *CANCELAR*.");
+                await sendMetaMessage(phone, "⚠️ Por favor presiona uno de los botones o escribe SI, NO o CANCELAR.");
             }
         }
         else if (step === 'asking_name') {
             const clientName = text;
             await updateUser(phone, { client_name: clientName });
-            await processOrder(phone, clientName, 'Nuevo Registro', user.current_state, message);
+            await processOrder(phone, clientName, 'Nuevo Registro', user.current_state);
         }
     } catch (error) {
         console.error("Error procesando mensaje:", error);
     }
-});
+}
 
-// Helper Function para procesar la orden final (CARRITO)
-async function processOrder(phone, clientName, clientNumber, currentState, message) {
+async function processOrder(phone, clientName, clientNumber, currentState) {
     const cart = userCarts[phone] || [];
     if (cart.length === 0) return;
 
@@ -715,26 +728,10 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
     clientTicket += `*Total a pagar: $${grandTotal.toFixed(2)} MXN* _(ya incluye IVA)_\n\n`;
     clientTicket += `En breve nuestros agentes se comunicarán contigo para confirmar tu pedido.`;
 
-    console.log(`[ENVIANDO TICKETS] a ${phone}`);
-    await client.sendMessage(phone, clientTicket);
+    await sendMetaMessage(phone, clientTicket);
 
-    // Obtener teléfono real del cliente para el link wa.me
-    let cleanClientPhone = phone.replace('@c.us', '').replace('@lid', '');
-    if (message) {
-        try {
-            const contact = await message.getContact();
-            if (contact && contact.id && contact.id._serialized) {
-                cleanClientPhone = contact.id._serialized.replace('@c.us', '').replace('@lid', '');
-            } else if (contact && contact.number) {
-                cleanClientPhone = contact.number;
-            }
-        } catch (e) {}
-    }
-    if (cleanClientPhone.startsWith('521') && cleanClientPhone.length === 13) {
-        cleanClientPhone = '52' + cleanClientPhone.substring(3);
-    }
+    let cleanClientPhone = phone.replace('@c.us', '').replace('@lid', '').replace(/\+/g, '').trim();
 
-    // Mandar mensaje a cada agente/sucursal de forma independiente
     for (const [agentPhone, items] of Object.entries(ordersByAgent)) {
         let agentMsg = `🔔 *NUEVO PEDIDO DESDE WHATSAPP BOT*\n\n`;
         agentMsg += `*Cliente (Wa):* wa.me/${cleanClientPhone}\n`;
@@ -753,28 +750,9 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
         agentMsg += `\n*Subtotal (con IVA):* $${agentTotal.toFixed(2)} MXN\n\n`;
         agentMsg += `👉 Toca el enlace del cliente arriba para abrir el chat.`;
 
-        let cleanAgent = agentPhone.replace('@c.us', '').replace('+', '').replace(/\s+/g, '').trim();
-        if (cleanAgent.length === 10) cleanAgent = `52${cleanAgent}`;
-
-        try {
-            let numberId = await client.getNumberId(cleanAgent);
-            if (!numberId && cleanAgent.startsWith('52') && cleanAgent.length === 12) {
-                numberId = await client.getNumberId(`521${cleanAgent.substring(2)}`);
-            } else if (!numberId && cleanAgent.startsWith('521') && cleanAgent.length === 13) {
-                numberId = await client.getNumberId(`52${cleanAgent.substring(3)}`);
-            }
-
-            if (numberId) {
-                await client.sendMessage(numberId._serialized, agentMsg);
-            } else {
-                await client.sendMessage(`${cleanAgent}@c.us`, agentMsg);
-            }
-        } catch (error) {
-            console.error(`⚠️ No se pudo enviar mensaje al agente (${cleanAgent}).`);
-        }
+        await sendMetaMessage(agentPhone, agentMsg);
     }
 
-    // Guardar en analíticas y descontar inventario iterando sobre el carrito
     for (const item of cart) {
         await logAnalytics({ phone_number: phone, search_query: item.part.part_number, found: true, ordered: true, branch_id: item.branch.branch_id, state: currentState });
         await deductInventory(item.branch.branch_id, item.part.part_number, item.quantity);
@@ -783,5 +761,3 @@ async function processOrder(phone, clientName, clientNumber, currentState, messa
     await updateUser(phone, { step: 'idle' });
     delete userCarts[phone];
 }
-
-client.initialize();
