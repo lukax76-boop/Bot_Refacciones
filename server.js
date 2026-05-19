@@ -479,6 +479,17 @@ client.on('message', async (message) => {
             await client.sendMessage(phone, `¡Perfecto! Buscaremos en *${validState}*.\n\nDime qué refacción buscas.\n\n💡 _Para buscar en otro estado en cualquier momento, envía la palabra *ESTADO*_`);
         }
         else if (step === 'asking_part') {
+            // Comando para terminar si ya tienen carrito
+            if (text.toUpperCase().trim() === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
+                if (user.client_name && user.client_number) {
+                    await processOrder(phone, user.client_name, user.client_number, user.current_state, message);
+                } else {
+                    await updateUser(phone, { step: 'asking_name' });
+                    await client.sendMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+                }
+                return;
+            }
+
             // Buscar pieza
             const state = user.current_state;
             console.log(`[ENVIANDO] a ${phone}: "🔍 Buscando..."`);
@@ -489,7 +500,15 @@ client.on('message', async (message) => {
             if (results.length === 0) {
                 await logAnalytics({ phone_number: phone, search_query: text, found: false, state: state });
                 console.log(`[ENVIANDO] a ${phone}: "❌ No encontrado"`);
-                await client.sendMessage(phone, `❌ Lo siento, no pudimos encontrar "${text}" en sucursales de ${state}.\n\nIntenta escribir solo el número de parte, o envía "Reiniciar" para buscar en otro estado.`);
+                
+                let fallbackMsg = `❌ Lo siento, no pudimos encontrar "${text}" en sucursales de ${state}.\n\nSimplemente escribe el nombre de otra pieza para buscar.`;
+                if (userCarts[phone] && userCarts[phone].length > 0) {
+                    fallbackMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar tu pedido actual, o *REINICIAR* para vaciar el carrito y empezar desde cero).*`;
+                } else {
+                    fallbackMsg += `\n\n*(Opcional: Envía la palabra ESTADO si deseas cambiar la zona de búsqueda, o *REINICIAR* para volver al menú principal).*`;
+                }
+                
+                await client.sendMessage(phone, fallbackMsg);
             } else {
                 await logAnalytics({ phone_number: phone, search_query: text, found: true, state: state });
                 
@@ -532,9 +551,17 @@ client.on('message', async (message) => {
                 
                 if (validItemsFound === 0) {
                     console.log(`[ENVIANDO] a ${phone}: "❌ Sin stock suficiente (ya está en carrito)"`);
-                    await client.sendMessage(phone, `⚠️ La refacción "${text}" existe en ${state}, pero el inventario disponible ya lo tienes reservado en tu carrito actual.\n\nIntenta buscar otra pieza o envía "Reiniciar".`);
+                    let alertMsg = `⚠️ La refacción "${text}" existe en ${state}, pero el inventario disponible ya lo tienes reservado en tu carrito actual.\n\nEscribe el nombre de otra pieza para seguir buscando.`;
+                    if (userCarts[phone] && userCarts[phone].length > 0) {
+                        alertMsg += `\n\n*(Opcional: Envía la palabra *FINALIZAR* para proceder a confirmar tu pedido).*`;
+                    }
+                    await client.sendMessage(phone, alertMsg);
                 } else {
-                    replyMsg += `👉 *Responde con el NÚMERO* de la sucursal para pedir la pieza, o envía "Reiniciar" para nueva búsqueda.`;
+                    replyMsg += `👉 *Responde con el NÚMERO* de la sucursal para pedir la pieza.`;
+                    replyMsg += `\n(Para buscar una pieza diferente, escribe *OTRA*).`;
+                    if (userCarts[phone] && userCarts[phone].length > 0) {
+                        replyMsg += `\n(Opcional: Envía *FINALIZAR* para ignorar esta búsqueda y confirmar tu pedido actual).`;
+                    }
                     
                     userSearchSessions[phone] = optionsData;
                     await updateUser(phone, { step: 'choosing_branch' });
@@ -544,6 +571,25 @@ client.on('message', async (message) => {
             }
         }
         else if (step === 'choosing_branch') {
+            if (text.toUpperCase().trim() === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
+                delete userSearchSessions[phone];
+                if (user.client_name && user.client_number) {
+                    await processOrder(phone, user.client_name, user.client_number, user.current_state, message);
+                } else {
+                    await updateUser(phone, { step: 'asking_name' });
+                    await client.sendMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+                }
+                return;
+            }
+            
+            if (text.toUpperCase().trim() === 'OTRA' || text.toUpperCase().trim() === 'OTRO') {
+                delete userSearchSessions[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                console.log(`[ENVIANDO] a ${phone}: "Nueva búsqueda solicitada desde sucursales"`);
+                await client.sendMessage(phone, "Dime qué *otra refacción* buscas:");
+                return;
+            }
+
             const optionIndex = parseInt(text);
             const sessionData = userSearchSessions[phone];
             
@@ -555,7 +601,7 @@ client.on('message', async (message) => {
                 await client.sendMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
             } else {
                 console.log(`[ENVIANDO] a ${phone}: "⚠️ Opción inválida"`);
-                await client.sendMessage(phone, "⚠️ Opción inválida. Responde con el número de la lista o 'Reiniciar'.");
+                await client.sendMessage(phone, "⚠️ Opción inválida.\n\n👉 Responde con el *NÚMERO* de la lista.\n👉 Escribe *OTRA* para buscar algo distinto sin perder tu carrito.\n👉 Escribe *REINICIAR* para borrar todo y empezar de cero.");
             }
         }
         else if (step === 'asking_quantity') {
