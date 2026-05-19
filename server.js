@@ -396,9 +396,15 @@ app.listen(PORT, () => {
 // ==========================================
 // 2. CONFIGURACIÓN DEL BOT DE WHATSAPP (META CLOUD API)
 // ==========================================
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
+const openAIKey = process.env.OPENAI_API_KEY;
+let openai = null;
+if (openAIKey && openAIKey !== 'tu_openai_api_key_aqui' && openAIKey.trim() !== '') {
+    openai = new OpenAI({
+        apiKey: openAIKey
+    });
+} else {
+    console.warn("⚠️ Advertencia: OpenAI API Key no configurada o es inválida. Las funciones de IA y TTS estarán desactivadas.");
+}
 
 // Cache temporal
 const userSearchSessions = {};
@@ -499,6 +505,10 @@ async function sendMetaMessage(phone, content, type = 'text', interactiveOptions
 
 // Helper: Transcribir Audio con OpenAI Whisper
 async function transcribeAudio(audioId) {
+    if (!openai) {
+        console.warn("⚠️ Intento de transcripción sin cliente de OpenAI configurado.");
+        return null;
+    }
     let tempPath = null;
     try {
         const token = process.env.META_ACCESS_TOKEN;
@@ -575,7 +585,7 @@ function cleanTextForTTS(text) {
 
 async function generateSpeechBuffer(text) {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey || apiKey === 'tu_openai_api_key_aqui') {
+    if (!openai || !apiKey || apiKey === 'tu_openai_api_key_aqui') {
         console.warn("⚠️ OpenAI API Key no configurada para TTS.");
         return null;
     }
