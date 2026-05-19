@@ -184,17 +184,54 @@
 
     <h1>Panel de Control Automotriz</h1>
 
-    <!-- ESTADO DEL BOT Y QR -->
-    <div class="glass-panel" style="width: 100%; max-width: 1000px; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; padding: 1.5rem 2rem;">
-        <div>
-            <h2 style="font-size: 1.2rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                <span id="botStatusDot" style="display:inline-block; width: 12px; height: 12px; border-radius: 50%; background: gray; box-shadow: 0 0 8px rgba(0,0,0,0.5);"></span>
-                Estado del Bot: <span id="botStatusText">Cargando...</span>
-            </h2>
-            <p id="botStatusDesc" style="font-size: 0.9rem; color: var(--text-muted);">Verificando la conexión con WhatsApp...</p>
+    <!-- NUEVO PANEL DE SALUD DEL SISTEMA (META CLOUD API) -->
+    <div class="glass-panel" style="width: 100%; max-width: 1000px; margin-bottom: 2rem; padding: 1.5rem 2rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+            <div>
+                <h2 style="font-size: 1.4rem; font-weight: 800; display: flex; align-items: center; gap: 0.75rem; color: var(--text-main);">
+                    <span id="systemStatusDot" style="display:inline-block; width: 14px; height: 14px; border-radius: 50%; background: gray; box-shadow: 0 0 10px rgba(0,0,0,0.5); transition: background 0.3s ease;"></span>
+                    Estatus General: <span id="systemStatusText" style="text-transform: uppercase; font-weight: 800; background: linear-gradient(to right, #94a3b8, #64748b); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Cargando...</span>
+                </h2>
+                <p id="systemStatusDesc" style="font-size: 0.9rem; color: var(--text-muted); margin-top: 0.25rem;">Diagnosticando los servicios del bot en tiempo real...</p>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--accent); background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.4rem 0.8rem; border-radius: 2rem; font-weight: 600;">
+                Meta Cloud API Activa
+            </div>
         </div>
-        <div id="qrContainer" style="display: none; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-            <img id="qrImage" src="" alt="Código QR WhatsApp" style="width: 150px; height: 150px; display: block;">
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+            <!-- SERVICIO: SUPABASE -->
+            <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-radius: 1rem; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; transition: border-color 0.3s ease;" id="statusCard-supabase">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main);">
+                        🌐 Supabase DB
+                    </span>
+                    <span id="serviceBadge-supabase" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 0.5rem; font-weight: bold; background: #64748b; color: white;">Cargando</span>
+                </div>
+                <p id="serviceDetails-supabase" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.3;">...</p>
+            </div>
+
+            <!-- SERVICIO: OPENAI -->
+            <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-radius: 1rem; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; transition: border-color 0.3s ease;" id="statusCard-openai">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main);">
+                        🎙️ OpenAI (TTS/STT)
+                    </span>
+                    <span id="serviceBadge-openai" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 0.5rem; font-weight: bold; background: #64748b; color: white;">Cargando</span>
+                </div>
+                <p id="serviceDetails-openai" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.3;">...</p>
+            </div>
+
+            <!-- SERVICIO: META API -->
+            <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-radius: 1rem; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; transition: border-color 0.3s ease;" id="statusCard-meta">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main);">
+                        💬 Meta Cloud API
+                    </span>
+                    <span id="serviceBadge-meta" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 0.5rem; font-weight: bold; background: #64748b; color: white;">Cargando</span>
+                </div>
+                <p id="serviceDetails-meta" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.3;">...</p>
+            </div>
         </div>
     </div>
 
@@ -235,6 +272,12 @@
                 <div id="uploadHelper" style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 0.3rem; margin-bottom: 1rem; font-size: 0.85rem; border-left: 3px solid var(--accent);">
                     <strong>Columnas obligatorias (1ra fila):</strong> <br>
                     <span id="helperText" style="font-family: monospace; color: #ffeb3b;">Numero_Parte, Descripcion, Precio, ID_Sucursal, Stock</span>
+                    <div style="margin-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                        <span style="color: var(--text-muted);">¿No tienes una plantilla?</span>
+                        <a href="/api/download-sample-excel?type=inventory" id="downloadSampleLink" style="color: #60a5fa; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem; transition: color 0.2s ease;">
+                            📥 Descargar plantilla de ejemplo
+                        </a>
+                    </div>
                 </div>
                 <div class="upload-area" id="dropzone">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
@@ -403,57 +446,86 @@
                 const res = await fetch('/api/status');
                 const data = await res.json();
                 
-                const dot = document.getElementById('botStatusDot');
-                const text = document.getElementById('botStatusText');
-                const desc = document.getElementById('botStatusDesc');
-                const qrContainer = document.getElementById('qrContainer');
-                const qrImage = document.getElementById('qrImage');
+                const dot = document.getElementById('systemStatusDot');
+                const text = document.getElementById('systemStatusText');
+                const desc = document.getElementById('systemStatusDesc');
 
+                // Actualizar estatus general
                 if (data.status === 'connected') {
                     dot.style.background = 'var(--success)';
-                    text.textContent = 'En Línea';
-                    desc.textContent = 'El bot está conectado y respondiendo mensajes.';
-                    qrContainer.style.display = 'none';
-                } else if (data.status === 'qr_ready') {
+                    text.textContent = 'En Línea / Saludable';
+                    text.style.background = 'linear-gradient(to right, #34d399, #10b981)';
+                    text.style.webkitBackgroundClip = 'text';
+                    text.style.webkitTextFillColor = 'transparent';
+                    desc.textContent = 'Todos los servicios cloud están configurados y funcionando correctamente.';
+                } else if (data.status === 'warning') {
                     dot.style.background = '#f59e0b'; // amber
-                    text.textContent = 'Esperando Escaneo';
-                    desc.textContent = 'Escanea el código QR desde tu celular para conectar el bot.';
-                    if (data.qr) {
-                        qrImage.src = data.qr;
-                        qrContainer.style.display = 'block';
-                    }
-                } else if (data.status === 'authenticating' || data.status === 'loading') {
-                    dot.style.background = '#3b82f6'; // blue
-                    text.textContent = 'Sincronizando...';
-                    desc.textContent = 'El celular se vinculó. Descargando mensajes (puede tardar un minuto, ten paciencia)...';
-                    qrContainer.style.display = 'none';
-                } else if (data.status === 'auth_failure') {
-                    dot.style.background = 'var(--danger)';
-                    text.textContent = 'Error de Vinculación';
-                    desc.textContent = 'Falló la autenticación. Ve a Dispositivos Vinculados en tu celular, ciérralo y reinicia el servidor.';
-                    qrContainer.style.display = 'none';
+                    text.textContent = 'Advertencia';
+                    text.style.background = 'linear-gradient(to right, #f59e0b, #d97706)';
+                    text.style.webkitBackgroundClip = 'text';
+                    text.style.webkitTextFillColor = 'transparent';
+                    desc.textContent = 'El sistema está parcialmente configurado. Revisa los detalles abajo.';
                 } else {
                     dot.style.background = 'var(--danger)';
-                    text.textContent = 'Desconectado';
-                    desc.textContent = 'El bot no está en línea o se está inicializando...';
-                    qrContainer.style.display = 'none';
+                    text.textContent = 'Error de Configuración';
+                    text.style.background = 'linear-gradient(to right, #f87171, #ef4444)';
+                    text.style.webkitBackgroundClip = 'text';
+                    text.style.webkitTextFillColor = 'transparent';
+                    desc.textContent = 'Fallas de conexión o credenciales faltantes en el servidor.';
                 }
+
+                // Renderizar servicios individuales
+                const services = ['supabase', 'openai', 'meta'];
+                services.forEach(srv => {
+                    const badge = document.getElementById(`serviceBadge-${srv}`);
+                    const details = document.getElementById(`serviceDetails-${srv}`);
+                    const card = document.getElementById(`statusCard-${srv}`);
+                    const srvData = data.services[srv];
+
+                    if (srvData.status === 'connected' || srvData.status === 'configured') {
+                        badge.textContent = srvData.status === 'connected' ? 'CONECTADO' : 'CONFIGURADO';
+                        badge.style.background = 'rgba(16, 185, 129, 0.2)';
+                        badge.style.color = '#34d399';
+                        badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+                        card.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+                    } else if (srvData.status === 'incomplete' || srvData.status === 'invalid_format') {
+                        badge.textContent = 'INCOMPLETO';
+                        badge.style.background = 'rgba(245, 158, 11, 0.2)';
+                        badge.style.color = '#fbbf24';
+                        badge.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+                        card.style.borderColor = 'rgba(245, 158, 11, 0.2)';
+                    } else {
+                        badge.textContent = 'ERROR / FALTA';
+                        badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                        badge.style.color = '#f87171';
+                        badge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                        card.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                    }
+                    details.textContent = srvData.details;
+                });
+
             } catch (e) {
-                console.error('Error cargando estado del bot:', e);
+                console.error('Error cargando estado del sistema:', e);
             }
+        }
+
+        function updateDownloadLink() {
+            const type = document.getElementById('uploadType').value;
+            const link = document.getElementById('downloadSampleLink');
+            link.href = `/api/download-sample-excel?type=${type}`;
         }
 
         loadBotStatus();
         loadStats();
         loadClients();
+        updateDownloadLink();
         
-        // Actualizar cada 3 segundos el estado del bot
-        setInterval(loadBotStatus, 3000);
+        // Actualizar cada 5 segundos el estado del bot (Health Check)
+        setInterval(loadBotStatus, 5000);
         
         // Actualizar estadísticas cada 10 segundos
         setInterval(() => {
             loadStats();
-            // No recargar clientes automáticamente para no borrar lo que el vendedor esté escribiendo
         }, 10000);
 
         // UI del Dropzone
@@ -466,7 +538,7 @@
             }
         });
 
-        // Cambio de Helper Text
+        // Cambio de Helper Text y plantilla de descarga
         const uploadType = document.getElementById('uploadType');
         const helperText = document.getElementById('helperText');
         
@@ -478,6 +550,7 @@
             } else if (e.target.value === 'parts') {
                 helperText.textContent = 'Numero_Parte, Descripcion, Precio';
             }
+            updateDownloadLink();
         });
 
         // Subir Excel

@@ -10,13 +10,16 @@ El sistema consta de dos módulos principales: un **Bot de WhatsApp interactivo*
 
 ### Flujo del Bot de WhatsApp
 1. **Detección Automática de Ubicación:** Al recibir el primer mensaje (ej. "Hola"), el bot analiza el Código de Área (LADA) del número telefónico. Si reconoce la LADA, asigna el Estado de la República automáticamente sin preguntarle al usuario.
-2. **Búsqueda Avanzada:** El cliente ingresa el nombre o número de pieza. El sistema realiza una búsqueda *Case-Insensitive* (ignora mayúsculas/minúsculas) en la base de datos de Supabase.
-3. **Filtro Regional:** El bot cruza la pieza solicitada con el inventario exclusivo de las sucursales del Estado del cliente.
-4. **Respuesta Inteligente:** 
-   - Si la encuentra, devuelve una lista de opciones numeradas con la sucursal, cantidad disponible y precio.
+2. **Selección Geográfica Táctil (Touch List):** Si no se puede reconocer el estado por LADA o el cliente envía el comando `ESTADO`, el bot despliega una **Lista Interactiva Táctil** nativa de WhatsApp con los estados disponibles, permitiéndole al usuario pulsar directamente sobre su región.
+3. **Búsqueda Avanzada:** El cliente ingresa el nombre o número de pieza (mediante texto o nota de voz). El sistema realiza una búsqueda *Case-Insensitive* (ignora mayúsculas/minúsculas) en la base de datos de Supabase.
+4. **Filtro Regional:** El bot cruza la pieza solicitada con el inventario exclusivo de las sucursales del Estado del cliente.
+5. **Respuesta Inteligente y Táctil:** 
+   - Si la encuentra, devuelve una lista interactiva de opciones numeradas con la sucursal, cantidad disponible y precio, que el usuario puede elegir haciendo clic sobre la pantalla.
    - Si no la encuentra, registra una **"Venta Perdida"** silenciosamente en la base de datos y le avisa al cliente.
-5. **Cierre de Venta (Handoff):** Si el cliente elige una sucursal, el bot confirma el pedido y envía una notificación automatizada con un enlace directo (`wa.me`) al WhatsApp del Agente de Ventas de esa sucursal en específico, permitiendo un contacto humano para el cobro y entrega.
-6. **Comandos Globales:** El usuario puede enviar la palabra `ESTADO` en cualquier momento para cambiar manualmente de región geográfica, o `REINICIAR` para cancelar su flujo actual.
+6. **Text-to-Speech (TTS) Multimodal:** Para enriquecer la interacción, cada respuesta conversacional del bot (mensajes de bienvenida, errores de búsqueda, confirmaciones de inventario o éxito de compra) va acompañada de una **Nota de voz personalizada de alta definición (TTS)** generada asíncronamente con el modelo de síntesis de voz de OpenAI (`tts-1`). Esto permite una experiencia auditiva premium. El bot cuenta con un fallback transparente: si las API de voz fallan o no están configuradas, opera limpiamente en modo texto puro sin detenerse.
+7. **Cierre de Venta (Handoff):** Si el cliente elige una sucursal, el bot confirma el pedido y envía una notificación automatizada con un enlace directo (`wa.me`) al WhatsApp del Agente de Ventas de esa sucursal en específico, permitiendo un contacto humano para el cobro y entrega.
+8. **Comandos Globales:** El usuario puede enviar la palabra `ESTADO` en cualquier momento para cambiar manualmente de región geográfica, o `REINICIAR` para cancelar su flujo actual.
+
 
 ---
 
@@ -67,8 +70,28 @@ El sistema depende de 5 tablas relacionales:
 5.  **`analytics` (Métricas):** Guarda un log histórico de cada evento de búsqueda y compra.
 
 ### Despliegue en la Nube
-El repositorio incluye un `Dockerfile` optimizado y un `.dockerignore`.
-Para desplegar en servicios en la nube (ej. Render):
-1. El contenedor instala una versión nativa de Chromium (`ghcr.io/puppeteer/puppeteer`).
-2. Se inyecta la variable `PUPPETEER_EXECUTABLE_PATH`.
-3. Al iniciar (`npm start`), el servidor levanta Puppeteer. El código QR debe ser escaneado **desde los logs de la consola** del proveedor de nube para establecer la sesión inicial en el contenedor.
+
+El bot y el panel de administración están diseñados bajo una arquitectura **totalmente en la nube**. Al utilizar la **API de Meta Cloud** en lugar de automatización de navegador local (Puppeteer), el despliegue es sumamente simple, rápido y consume mínimos recursos.
+
+#### Dockerfile Optimizado (Alpine Linux)
+El repositorio incluye un `Dockerfile` basado en **Node.js 22-Alpine**, el cual:
+1. Pesa aproximadamente **100MB** (en lugar de los 1.5GB requeridos por entornos con navegadores Chromium instalados).
+2. Se compila e implementa en segundos.
+3. No requiere configuraciones de variables Puppeteer ni descargas de Chromium adicionales.
+
+#### Pasos para Desplegar en la Nube (ej. Render.com, Railway o VPS)
+1. **Crear Servicio Web:** Vincula tu repositorio de GitHub a tu proveedor de hosting en la nube (ej. Render o Railway).
+2. **Configurar el Entorno:** Inyecta las siguientes variables de entorno en el panel de control de tu proveedor:
+   *   `PORT=3000`
+   *   `META_ACCESS_TOKEN` (Tu Token de Acceso Permanente o Temporal de Meta Developer Portal)
+   *   `META_PHONE_NUMBER_ID` (El identificador de número telefónico de tu aplicación de Meta)
+   *   `META_WEBHOOK_VERIFY_TOKEN` (El token secreto para validar tu webhook, ej. `refacciones_webhook_token_123`)
+   *   `OPENAI_API_KEY` (Para transcripción de notas de voz de clientes y respuestas TTS)
+   *   `SUPABASE_URL` y `SUPABASE_KEY` (Credenciales de tu base de datos en Supabase)
+3. **Configurar Webhook en Meta Portal:**
+   *   Una vez que tu aplicación esté activa en la nube (ej. `https://refacciones-bot.onrender.com`), entra a tu portal de desarrolladores en **Meta (Developers.facebook.com)**.
+   *   En la sección de WhatsApp > Configuración de Webhook, establece la URL de Callback como:
+       `https://tu-app-en-la-nube.onrender.com/webhook`
+   *   Ingresa el valor de `META_WEBHOOK_VERIFY_TOKEN` en el campo correspondiente para completar el enlace.
+   *   ¡Listo! Todo el tráfico de WhatsApp, la base de datos de inventarios y los servicios de voz operarán en tiempo real de forma 100% cloud.
+

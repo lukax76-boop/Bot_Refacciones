@@ -88,6 +88,14 @@ app.post('/api/upload-inventory', upload.single('excel'), async (req, res) => {
     } catch (error) {
         console.error("Error procesando Excel:", error);
         res.status(500).json({ error: "Error interno al procesar el archivo de Excel." });
+    } finally {
+        if (req.file && req.file.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (err) {
+                console.error("Error deleting temp inventory Excel file:", err);
+            }
+        }
     }
 });
 
@@ -132,6 +140,14 @@ app.post('/api/upload-branches', upload.single('excel'), async (req, res) => {
     } catch (error) {
         console.error("Error procesando Excel de Sucursales:", error);
         res.status(500).json({ error: "Error al procesar el archivo de Sucursales." });
+    } finally {
+        if (req.file && req.file.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (err) {
+                console.error("Error deleting temp branches Excel file:", err);
+            }
+        }
     }
 });
 
@@ -172,6 +188,14 @@ app.post('/api/upload-parts', upload.single('excel'), async (req, res) => {
     } catch (error) {
         console.error("Error procesando Excel de Refacciones:", error);
         res.status(500).json({ error: "Error al procesar el archivo de Refacciones." });
+    } finally {
+        if (req.file && req.file.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (err) {
+                console.error("Error deleting temp parts Excel file:", err);
+            }
+        }
     }
 });
 
@@ -188,12 +212,180 @@ app.post('/api/clients/:phone', async (req, res) => {
     res.json({ success });
 });
 
-let botStatus = 'disconnected';
-let currentQR = null;
+// API: Descargar Excel de Ejemplo Dinámico
+app.get('/api/download-sample-excel', (req, res) => {
+    const type = req.query.type || 'inventory';
+    let headers = [];
+    let sampleData = [];
+    let filename = '';
 
-// API: Obtener Estado del Bot y QR
-app.get('/api/status', (req, res) => {
-    res.json({ status: botStatus, qr: currentQR });
+    if (type === 'inventory') {
+        headers = ['Numero_Parte', 'Descripcion', 'Precio', 'ID_Sucursal', 'Stock'];
+        sampleData = [
+            {
+                Numero_Parte: 'F-10023',
+                Descripcion: 'Filtro de Aceite Premium',
+                Precio: 185.50,
+                ID_Sucursal: 1,
+                Stock: 25
+            },
+            {
+                Numero_Parte: 'B-20045',
+                Descripcion: 'Balatas Delanteras Carbón',
+                Precio: 450.00,
+                ID_Sucursal: 1,
+                Stock: 12
+            },
+            {
+                Numero_Parte: 'F-10023',
+                Descripcion: 'Filtro de Aceite Premium',
+                Precio: 185.50,
+                ID_Sucursal: 2,
+                Stock: 15
+            }
+        ];
+        filename = 'ejemplo_inventario.xlsx';
+    } else if (type === 'branches') {
+        headers = ['id', 'name', 'state', 'address', 'agent_phone', 'contact'];
+        sampleData = [
+            {
+                id: 1,
+                name: 'Sucursal Guadalajara Centro',
+                state: 'Jalisco',
+                address: 'Av. Juárez 150, Col. Centro',
+                agent_phone: '5213312345678',
+                contact: 'Ing. Carlos Mendoza'
+            },
+            {
+                id: 2,
+                name: 'Sucursal Monterrey Norte',
+                state: 'Nuevo León',
+                address: 'Av. Universidad 4500, Col. Anáhuac',
+                agent_phone: '5218112345678',
+                contact: 'Lic. Sofía Garza'
+            }
+        ];
+        filename = 'ejemplo_sucursales.xlsx';
+    } else if (type === 'parts') {
+        headers = ['Numero_Parte', 'Descripcion', 'Precio'];
+        sampleData = [
+            {
+                Numero_Parte: 'F-10023',
+                Descripcion: 'Filtro de Aceite Premium',
+                Precio: 185.50
+            },
+            {
+                Numero_Parte: 'B-20045',
+                Descripcion: 'Balatas Delanteras Carbón',
+                Precio: 450.00
+            },
+            {
+                Numero_Parte: 'B-30089',
+                Descripcion: 'Bujía de Iridio NGK',
+                Precio: 120.00
+            }
+        ];
+        filename = 'ejemplo_refacciones.xlsx';
+    }
+
+    try {
+        const worksheet = xlsx.utils.json_to_sheet(sampleData, { header: headers });
+        const workbook = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Ejemplo');
+        
+        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buffer);
+    } catch (error) {
+        console.error('Error generando Excel de ejemplo:', error);
+        res.status(500).send('Error al generar el archivo de ejemplo.');
+    }
+});
+
+// API: Obtener Estado de Salud del Sistema (Health Check para Meta Cloud API)
+app.get('/api/status', async (req, res) => {
+    // 1. Verificar Supabase
+    let supabaseStatus = 'disconnected';
+    let supabaseDetails = 'No configurado';
+    if (supabase) {
+        try {
+            const { data, error } = await supabase.from('branches').select('id').limit(1);
+            if (error) {
+                supabaseStatus = 'error';
+                supabaseDetails = `Error de consulta: ${error.message}`;
+            } else {
+                supabaseStatus = 'connected';
+                supabaseDetails = 'Base de datos en línea y conectada';
+            }
+        } catch (err) {
+            supabaseStatus = 'error';
+            supabaseDetails = `Fallo de conexión: ${err.message}`;
+        }
+    } else {
+        supabaseStatus = 'missing_credentials';
+        supabaseDetails = 'Faltan SUPABASE_URL o SUPABASE_KEY en .env';
+    }
+
+    // 2. Verificar OpenAI
+    let openaiStatus = 'disconnected';
+    let openaiDetails = 'No configurada';
+    const openAIKey = process.env.OPENAI_API_KEY;
+    if (openAIKey && openAIKey !== 'tu_openai_api_key_aqui' && openAIKey.trim() !== '') {
+        if (openAIKey.startsWith('sk-')) {
+            openaiStatus = 'configured';
+            openaiDetails = 'API Key válida sintácticamente (comienza con sk-)';
+        } else {
+            openaiStatus = 'invalid_format';
+            openaiDetails = 'Formato de API Key no válido (debe comenzar con sk-)';
+        }
+    } else {
+        openaiStatus = 'missing_credentials';
+        openaiDetails = 'Falta OPENAI_API_KEY o tiene el valor por defecto';
+    }
+
+    // 3. Verificar Meta Cloud API
+    let metaStatus = 'disconnected';
+    let metaDetails = 'No configurada';
+    const metaToken = process.env.META_ACCESS_TOKEN;
+    const metaPhoneId = process.env.META_PHONE_NUMBER_ID;
+    const metaVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+
+    const hasToken = metaToken && metaToken !== 'tu_token_de_acceso_temporal_aqui' && metaToken.trim() !== '';
+    const hasPhoneId = metaPhoneId && metaPhoneId !== 'tu_phone_number_id_aqui' && metaPhoneId.trim() !== '';
+    const hasVerify = metaVerifyToken && metaVerifyToken !== 'tu_webhook_verify_token_aqui' && metaVerifyToken.trim() !== '';
+
+    if (hasToken && hasPhoneId && hasVerify) {
+        metaStatus = 'configured';
+        metaDetails = 'Webhook y credenciales de envío listas';
+    } else {
+        const missing = [];
+        if (!hasToken) missing.push('META_ACCESS_TOKEN');
+        if (!hasPhoneId) missing.push('META_PHONE_NUMBER_ID');
+        if (!hasVerify) missing.push('META_WEBHOOK_VERIFY_TOKEN');
+        metaStatus = 'incomplete';
+        metaDetails = `Falta configurar: ${missing.join(', ')}`;
+    }
+
+    // 4. Estatus General
+    let overallStatus = 'disconnected';
+    if (supabaseStatus === 'connected' && openaiStatus === 'configured' && metaStatus === 'configured') {
+        overallStatus = 'connected';
+    } else if (supabaseStatus === 'connected' && (openaiStatus === 'configured' || metaStatus === 'configured')) {
+        overallStatus = 'warning';
+    } else {
+        overallStatus = 'error';
+    }
+
+    res.json({
+        status: overallStatus,
+        services: {
+            supabase: { status: supabaseStatus, details: supabaseDetails },
+            openai: { status: openaiStatus, details: openaiDetails },
+            meta: { status: metaStatus, details: metaDetails }
+        }
+    });
 });
 
 app.listen(PORT, () => {
@@ -307,6 +499,7 @@ async function sendMetaMessage(phone, content, type = 'text', interactiveOptions
 
 // Helper: Transcribir Audio con OpenAI Whisper
 async function transcribeAudio(audioId) {
+    let tempPath = null;
     try {
         const token = process.env.META_ACCESS_TOKEN;
         const mediaRes = await axios.get(`https://graph.facebook.com/v19.0/${audioId}`, {
@@ -319,7 +512,7 @@ async function transcribeAudio(audioId) {
             responseType: 'stream'
         });
         
-        const tempPath = path.join(__dirname, `temp_${Date.now()}.ogg`);
+        tempPath = path.join(__dirname, `temp_${Date.now()}.ogg`);
         const writer = fs.createWriteStream(tempPath);
         audioRes.data.pipe(writer);
         await new Promise((resolve, reject) => {
@@ -334,12 +527,187 @@ async function transcribeAudio(audioId) {
             language: "es"
         });
         
-        fs.unlinkSync(tempPath);
         return transcription.text;
     } catch(e) {
         console.error("Error transcribing audio:", e.response?.data || e.message);
         return null;
+    } finally {
+        if (tempPath && fs.existsSync(tempPath)) {
+            try {
+                fs.unlinkSync(tempPath);
+            } catch (err) {
+                console.error("Error deleting temp audio file:", err);
+            }
+        }
     }
+}
+
+// ==========================================
+// 3. TEXT-TO-SPEECH (TTS) HELPERS
+// ==========================================
+
+function cleanTextForTTS(text) {
+    if (!text) return "";
+    return text
+        .replace(/\*/g, '') // Quitar negritas *
+        .replace(/_/g, '') // Quitar cursivas _
+        .replace(/-{2,}/g, '') // Quitar divisores ----
+        .replace(/▪/g, '') // Quitar viñetas de cuadrado
+        .replace(/[-\*•]/g, '') // Quitar guiones y viñetas
+        .replace(/wa\.me\/\d+/g, '') // Quitar enlaces wa.me
+        .replace(/💡/g, '') // Quitar emojis específicos si interfieren
+        .replace(/🚗/g, '')
+        .replace(/🏪/g, '')
+        .replace(/📍/g, '')
+        .replace(/🔎/g, '')
+        .replace(/📦/g, '')
+        .replace(/✅/g, '')
+        .replace(/⚠️/g, '')
+        .replace(/❌/g, '')
+        .replace(/🎉/g, '')
+        .replace(/🔄/g, '')
+        .replace(/⏱️/g, '')
+        .replace(/🗑️/g, '')
+        .replace(/🔔/g, '')
+        .replace(/👉/g, '')
+        .trim();
+}
+
+async function generateSpeechBuffer(text) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey || apiKey === 'tu_openai_api_key_aqui') {
+        console.warn("⚠️ OpenAI API Key no configurada para TTS.");
+        return null;
+    }
+    try {
+        const mp3 = await openai.audio.speech.create({
+            model: "tts-1",
+            voice: "alloy",
+            input: text,
+        });
+        const buffer = Buffer.from(await mp3.arrayBuffer());
+        return buffer;
+    } catch (error) {
+        console.error("Error generando TTS con OpenAI:", error.message);
+        return null;
+    }
+}
+
+async function uploadAudioToWhatsApp(audioBuffer) {
+    const token = process.env.META_ACCESS_TOKEN;
+    const phoneId = process.env.META_PHONE_NUMBER_ID;
+    if (!token || !phoneId) {
+        console.error("Faltan credenciales de Meta Cloud API para subir media.");
+        return null;
+    }
+
+    try {
+        const boundary = '----WhatsAppTTSBoundary' + Date.now().toString(16);
+        const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="voice.mp3"\r\nContent-Type: audio/mpeg\r\n\r\n`;
+        const middle = `\r\n--${boundary}\r\nContent-Disposition: form-data; name="messaging_product"\r\n\r\nwhatsapp\r\n`;
+        const footer = `--${boundary}--\r\n`;
+
+        const payload = Buffer.concat([
+            Buffer.from(header, 'utf-8'),
+            audioBuffer,
+            Buffer.from(middle + footer, 'utf-8')
+        ]);
+
+        const response = await axios.post(
+            `https://graph.facebook.com/v19.0/${phoneId}/media`,
+            payload,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': `multipart/form-data; boundary=${boundary}`
+                }
+            }
+        );
+
+        return response.data.id;
+    } catch (error) {
+        console.error("Error al subir audio a WhatsApp:", error.response?.data || error.message);
+        return null;
+    }
+}
+
+async function sendMetaVoiceNote(phone, text) {
+    const cleanText = cleanTextForTTS(text);
+    if (!cleanText) return;
+
+    console.log(`🎙️ Generando nota de voz (TTS) para ${phone}: "${cleanText.substring(0, 50)}..."`);
+    const audioBuffer = await generateSpeechBuffer(cleanText);
+    if (!audioBuffer) return;
+
+    const mediaId = await uploadAudioToWhatsApp(audioBuffer);
+    if (!mediaId) return;
+
+    let to = phone.replace('@c.us', '').replace('@lid', '').replace(/\+/g, '').trim();
+    if (to.length === 10) to = '52' + to;
+
+    const token = process.env.META_ACCESS_TOKEN;
+    const phoneId = process.env.META_PHONE_NUMBER_ID;
+
+    try {
+        await axios.post(
+            `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+            {
+                messaging_product: "whatsapp",
+                to: to,
+                type: "audio",
+                audio: {
+                    id: mediaId
+                }
+            },
+            {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            }
+        );
+        console.log(`🎙️ Nota de voz (TTS) enviada exitosamente a ${to}`);
+    } catch (error) {
+        console.error("Error sending audio message:", error.response?.data || error.message);
+    }
+}
+
+async function sendStateOptionsList(phone, user, customText = null) {
+    if (availableStatesCache.length === 0) {
+        await sendMetaMessage(phone, "⚠️ Lo siento, no hay estados disponibles registrados en el sistema en este momento.");
+        return;
+    }
+
+    let rows = availableStatesCache.map((s, idx) => ({
+        id: s.original,
+        title: s.original.substring(0, 24),
+        description: `Ver catálogo de ${s.original}`
+    }));
+
+    if (rows.length > 10) rows = rows.slice(0, 10);
+
+    let bodyText = customText;
+    if (!bodyText) {
+        if (user && user.client_name) {
+            bodyText = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy?`;
+        } else {
+            bodyText = "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas?";
+        }
+    }
+
+    await sendMetaMessage(phone, null, 'interactive', {
+        type: "list",
+        header: { type: "text", text: `📍 Ubicación` },
+        body: { text: bodyText },
+        footer: { text: "Selecciona tu estado" },
+        action: {
+            button: "Ver Estados",
+            sections: [{
+                title: "Estados Disponibles",
+                rows: rows
+            }]
+        }
+    });
+
+    // Enviar también nota de voz de bienvenida de forma asíncrona
+    sendMetaVoiceNote(phone, bodyText).catch(e => console.error("Error en TTS asíncrono de Estados:", e));
 }
 
 // WEBHOOK DE META CLOUD API
@@ -446,7 +814,7 @@ async function processMessageLogic(phone, text, senderName) {
 
     if (text.toUpperCase() === 'ESTADO') {
         await updateUser(phone, { step: 'asking_state', current_state: null });
-        await sendMetaMessage(phone, "Cambiando de estado... 📍\n¿En qué *Estado de la República* deseas hacer la consulta ahora?");
+        await sendStateOptionsList(phone, user, "Cambiando de estado... 📍\n¿En qué *Estado de la República* deseas hacer la consulta ahora?");
         return;
     }
 
@@ -458,39 +826,39 @@ async function processMessageLogic(phone, text, senderName) {
                 if (user.client_name) greeting = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗`;
                 greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas (puedes enviar un mensaje de voz o texto).\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
                 await sendMetaMessage(phone, greeting);
+                sendMetaVoiceNote(phone, greeting).catch(e => console.error("TTS error:", e));
             } else {
                 const detectedState = detectStateFromPhone(phone);
                 if (detectedState) {
                     await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
-                    await sendMetaMessage(phone, `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nDime qué refacción buscas (audio o texto).\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`);
+                    const msg = `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nDime qué refacción buscas (audio o texto).\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`;
+                    await sendMetaMessage(phone, msg);
+                    sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 } else {
                     await updateUser(phone, { step: 'asking_state' });
-                    if (user.client_name && user.client_number) {
-                        await sendMetaMessage(phone, `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy?`);
-                    } else {
-                        await sendMetaMessage(phone, "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas?");
-                    }
+                    await sendStateOptionsList(phone, user);
                 }
             }
         } 
         else if (step === 'asking_state') {
             const validState = getValidState(text);
             if (!validState) {
-                let stateOptionsMsg = "⚠️ No logramos reconocer ese estado.\n\nPor favor, responde con el *NÚMERO* o el *NOMBRE* de tu estado en esta lista:\n\n";
-                if (availableStatesCache.length === 0) stateOptionsMsg = "⚠️ Lo siento, no hay estados.";
-                else availableStatesCache.forEach((s, idx) => stateOptionsMsg += `[${idx + 1}] ${s.original}\n`);
-                await sendMetaMessage(phone, stateOptionsMsg);
+                await sendStateOptionsList(phone, user, "⚠️ No logramos reconocer ese estado.\n\nPor favor, selecciona tu *Estado de la República* de la lista táctil:");
                 return;
             }
             await updateUser(phone, { current_state: validState, step: 'asking_part' });
-            await sendMetaMessage(phone, `¡Perfecto! Buscaremos en *${validState}*.\n\nDime qué refacción buscas.\n\n💡 _Para cambiar envía *ESTADO*_`);
+            const msg = `¡Perfecto! Buscaremos en *${validState}*.\n\nDime qué refacción buscas.`;
+            await sendMetaMessage(phone, msg);
+            sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
         }
         else if (step === 'asking_part') {
             if (text.toUpperCase().trim() === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
                 if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 else {
                     await updateUser(phone, { step: 'asking_name' });
-                    await sendMetaMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+                    const msg = "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?";
+                    await sendMetaMessage(phone, msg);
+                    sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 }
                 return;
             }
@@ -499,7 +867,9 @@ async function processMessageLogic(phone, text, senderName) {
             if (matchedState) {
                 await updateUser(phone, { current_state: matchedState, step: 'asking_part' });
                 user.current_state = matchedState;
-                await sendMetaMessage(phone, `📍 Detecté que mencionaste el estado *${matchedState}*.\nHe actualizado tu zona de búsqueda a este estado.\n\nAhora sí, dime ¿qué refacción buscas?`);
+                const msg = `📍 Detecté que mencionaste el estado *${matchedState}*.\nHe actualizado tu zona de búsqueda a este estado.\n\nAhora sí, dime ¿qué refacción buscas?`;
+                await sendMetaMessage(phone, msg);
+                sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 return;
             }
 
@@ -510,7 +880,9 @@ async function processMessageLogic(phone, text, senderName) {
                     const matchedBranchState = branchMatch[0].state;
                     await updateUser(phone, { current_state: matchedBranchState, step: 'asking_part' });
                     user.current_state = matchedBranchState;
-                    await sendMetaMessage(phone, `🏪 Detecté que mencionaste la sucursal *${branchMatch[0].name}* (*${matchedBranchState}*).\nHe actualizado tu zona.\n\nAhora sí, dime ¿qué refacción buscas?`);
+                    const msg = `🏪 Detecté que mencionaste la sucursal *${branchMatch[0].name}* (*${matchedBranchState}*).\nHe actualizado tu zona.\n\nAhora sí, dime ¿qué refacción buscas?`;
+                    await sendMetaMessage(phone, msg);
+                    sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                     return;
                 }
             }
@@ -525,6 +897,7 @@ async function processMessageLogic(phone, text, senderName) {
                 if (userCarts[phone] && userCarts[phone].length > 0) fallbackMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar pedido, o *REINICIAR* para vaciar el carrito).*`;
                 else fallbackMsg += `\n\n*(Opcional: Envía ESTADO para cambiar la zona, o *REINICIAR* para volver al menú).*`;
                 await sendMetaMessage(phone, fallbackMsg);
+                sendMetaVoiceNote(phone, fallbackMsg).catch(e => console.error("TTS error:", e));
             } else {
                 await logAnalytics({ phone_number: phone, search_query: text, found: true, state: state });
                 const cart = userCarts[phone] || [];
@@ -569,6 +942,7 @@ async function processMessageLogic(phone, text, senderName) {
                     let alertMsg = `⚠️ La refacción "${text}" existe en ${state}, pero el inventario disponible ya lo tienes reservado en tu carrito actual.\n\nEscribe el nombre de otra pieza para seguir buscando.`;
                     if (userCarts[phone] && userCarts[phone].length > 0) alertMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar tu pedido).*`;
                     await sendMetaMessage(phone, alertMsg);
+                    sendMetaVoiceNote(phone, alertMsg).catch(e => console.error("TTS error:", e));
                 } else {
                     sections[0].rows.push({ id: "OTRA", title: "Buscar otra pieza" });
                     if (cart.length > 0) sections[0].rows.push({ id: "FINALIZAR", title: "Finalizar pedido actual" });
@@ -589,6 +963,7 @@ async function processMessageLogic(phone, text, senderName) {
                         footer: { text: "Selecciona una sucursal" },
                         action: { button: "Ver Opciones", sections: sections }
                     });
+                    sendMetaVoiceNote(phone, `Hemos encontrado las siguientes opciones en sucursales de ${state}. Por favor presiona el botón Ver Opciones en pantalla para elegir tu sucursal.`).catch(e => console.error("TTS error:", e));
                 }
             }
         }
@@ -617,8 +992,10 @@ async function processMessageLogic(phone, text, senderName) {
                 userPendingItems[phone] = { part: selection.part, branch: selection.branch };
                 await updateUser(phone, { step: 'asking_quantity' });
                 await sendMetaMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
+                sendMetaVoiceNote(phone, `¿Cuántas piezas necesitas de ${selection.part.description}? Por favor responde escribiendo solo el número.`).catch(e => console.error("TTS error:", e));
             } else {
                 await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o envía *REINICIAR*.");
+                sendMetaVoiceNote(phone, "Opción inválida. Usa el botón de la lista en tu pantalla o envía REINICIAR.").catch(e => console.error("TTS error:", e));
             }
         }
         else if (step === 'asking_quantity') {
@@ -638,6 +1015,7 @@ async function processMessageLogic(phone, text, senderName) {
             const quantity = parseInt(text);
             if (isNaN(quantity) || quantity <= 0) {
                 await sendMetaMessage(phone, "⚠️ Por favor ingresa un número válido (ej. 1, 2, 3), o responde *REGRESAR* para ver las opciones.");
+                sendMetaVoiceNote(phone, "Por favor ingresa un número de piezas válido, o responde REGRESAR para ver las opciones de sucursales.").catch(e => console.error("TTS error:", e));
                 return;
             }
             
@@ -648,7 +1026,9 @@ async function processMessageLogic(phone, text, senderName) {
             }
 
             if (quantity > pendingItem.branch.stock) {
-                await sendMetaMessage(phone, `⚠️ Lo sentimos, actualmente solo tenemos *${pendingItem.branch.stock}* pieza(s) disponible(s) en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${pendingItem.branch.stock}, o responde *REGRESAR*.`);
+                const stockMsg = `⚠️ Lo sentimos, actualmente solo tenemos *${pendingItem.branch.stock}* pieza(s) disponible(s) en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${pendingItem.branch.stock}, o responde *REGRESAR*.`;
+                await sendMetaMessage(phone, stockMsg);
+                sendMetaVoiceNote(phone, `Lo sentimos, actualmente solo tenemos ${pendingItem.branch.stock} piezas disponibles en esta sucursal. Por favor ingresa una cantidad menor o igual, o responde REGRESAR.`).catch(e => console.error("TTS error:", e));
                 return;
             }
 
@@ -672,23 +1052,29 @@ async function processMessageLogic(phone, text, senderName) {
                     ]
                 }
             });
+            sendMetaVoiceNote(phone, `¡Pieza agregada a tu carrito! Llevas ${userCarts[phone].length} artículo en tu pedido. ¿Deseas agregar otra refacción, finalizar el pedido o cancelar todo? Selecciona en tu pantalla.`).catch(e => console.error("TTS error:", e));
         }
         else if (step === 'asking_more') {
             const res = text.toUpperCase().trim();
             if (res === 'SI' || res === 'SÍ' || res === 'S') {
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
+                sendMetaVoiceNote(phone, "Entendido. Dime qué otra refacción buscas:").catch(e => console.error("TTS error:", e));
             } else if (res === 'NO' || res === 'N' || res === 'FINALIZAR') {
                 if (user.client_name && user.client_number) {
                     await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 } else {
                     await updateUser(phone, { step: 'asking_name' });
-                    await sendMetaMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
+                    const msg = "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?";
+                    await sendMetaMessage(phone, msg);
+                    sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 }
             } else if (res === 'CANCELAR') {
                 delete userCarts[phone];
                 await updateUser(phone, { step: 'asking_part' });
-                await sendMetaMessage(phone, "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción buscas ahora:");
+                const msg = "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción buscas ahora:";
+                await sendMetaMessage(phone, msg);
+                sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
             } else {
                 await sendMetaMessage(phone, "⚠️ Por favor presiona uno de los botones o escribe SI, NO o CANCELAR.");
             }
@@ -729,6 +1115,7 @@ async function processOrder(phone, clientName, clientNumber, currentState) {
     clientTicket += `En breve nuestros agentes se comunicarán contigo para confirmar tu pedido.`;
 
     await sendMetaMessage(phone, clientTicket);
+    sendMetaVoiceNote(phone, "¡Excelente! Tu pedido ha sido confirmado con éxito. Hemos enviado el resumen a tu WhatsApp y en breve nuestros agentes de ventas se comunicarán contigo para coordinar el pago y la entrega. ¡Muchas gracias por tu compra!").catch(e => console.error("TTS error:", e));
 
     let cleanClientPhone = phone.replace('@c.us', '').replace('@lid', '').replace(/\+/g, '').trim();
 

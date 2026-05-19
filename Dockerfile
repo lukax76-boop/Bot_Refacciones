@@ -1,25 +1,18 @@
-FROM node:22-bullseye-slim
+FROM node:22-alpine
 
 WORKDIR /app
 
-# Instalar Chromium y las librerías del sistema que necesita Puppeteer
-RUN apt-get update && apt-get install -y \
-    chromium \
-    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
-# Variables para decirle a Puppeteer dónde está Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-
-# Copiar e instalar
+# Copiar archivos de dependencias
 COPY package*.json ./
-RUN npm install
 
-# Copiar el resto del proyecto
+# Instalar dependencias de producción (omite dependencias de desarrollo y acelera la compilación)
+RUN npm ci --only=production
+
+# Copiar el resto del código del proyecto
 COPY . .
 
+# Exponer el puerto del dashboard y webhook
 EXPOSE 3000
 
+# Iniciar servidor en producción
 CMD ["npm", "start"]
