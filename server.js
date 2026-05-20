@@ -910,8 +910,8 @@ async function processMessageLogic(phone, text, senderName) {
                             optionsData[optionCounter] = { part: item.part, branch: inv };
                             sections[0].rows.push({
                                 id: optionCounter.toString(),
-                                title: `${inv.branch_name} (${inv.stock})`,
-                                description: `${item.part.part_number} - $${item.part.price}`
+                                title: inv.branch_name.substring(0, 24).trim(),
+                                description: `Stock: ${inv.stock} | ${item.part.part_number} - $${item.part.price}`.substring(0, 72)
                             });
                             optionCounter++;
                         });
@@ -925,8 +925,8 @@ async function processMessageLogic(phone, text, senderName) {
                     sendMetaVoiceNote(phone, alertMsg).catch(e => console.error("TTS error:", e));
                 } else {
                     sections[0].rows.push({ id: "OTRA", title: "Buscar otra pieza" });
-                    if (cart.length > 0) sections[0].rows.push({ id: "FINALIZAR", title: "Finalizar pedido actual" });
-                    sections[0].rows.push({ id: "REINICIAR", title: "Borrar carrito y reiniciar" });
+                    if (cart.length > 0) sections[0].rows.push({ id: "FINALIZAR", title: "Finalizar pedido" });
+                    sections[0].rows.push({ id: "REINICIAR", title: "Vaciar y reiniciar" });
 
                     userSearchSessions[phone] = optionsData;
                     await updateUser(phone, { step: 'choosing_branch' });
