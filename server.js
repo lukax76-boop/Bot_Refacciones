@@ -450,6 +450,75 @@ function normalizeString(str) {
     return str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 }
 
+// ==========================================
+// 2.5. PARSERS PARA ENTRADAS DE VOZ (STT) Y TEXTO HABLADO
+// ==========================================
+function parseSpokenNumber(text) {
+    if (!text) return NaN;
+    const clean = text.toLowerCase().trim();
+    
+    const wordToNumber = {
+        'cero': 0, 'uno': 1, 'una': 1, 'primer': 1, 'primero': 1, 'primera': 1,
+        'dos': 2, 'segundo': 2, 'segunda': 2,
+        'tres': 3, 'tercer': 3, 'tercero': 3, 'tercera': 3,
+        'cuatro': 4, 'cuarto': 4, 'cuarta': 4,
+        'cinco': 5, 'quinto': 5, 'quinta': 5,
+        'seis': 6, 'sexto': 6, 'sexta': 6,
+        'siete': 7, 'septimo': 7, 'séptimo': 7, 'septima': 7, 'séptima': 7,
+        'ocho': 8, 'octavo': 8, 'octava': 8,
+        'nueve': 9, 'noveno': 9, 'novena': 9,
+        'diez': 10, 'decimo': 10, 'décimo': 10, 'decima': 10, 'décima': 10
+    };
+    
+    const matchDigits = clean.match(/\b\d+\b/);
+    if (matchDigits) {
+        return parseInt(matchDigits[0]);
+    }
+    
+    const words = clean.split(/\s+/);
+    for (const word of words) {
+        const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+        if (wordToNumber[cleanWord] !== undefined) {
+            return wordToNumber[cleanWord];
+        }
+    }
+    
+    return NaN;
+}
+
+function parseSpokenIntent(text) {
+    if (!text) return null;
+    const clean = text.toLowerCase().trim();
+    
+    const yesPatterns = [
+        /\bsi\b/i, /\bsí\b/i, /\bclaro\b/i, /\bagregar\b/i, /\botra\b/i, /\botro\b/i, 
+        /\bmas\b/i, /\bmás\b/i, /\baceptar\b/i, /\bde acuerdo\b/i, /\bpor favor\b/i
+    ];
+    
+    const noPatterns = [
+        /\bno\b/i, /\bterminar\b/i, /\bfinalizar\b/i, /\bya no\b/i, /\bninguno\b/i, 
+        /\bsuficiente\b/i, /\basí está bien\b/i, /\basi esta bien\b/i, /\bno gracias\b/i
+    ];
+    
+    const cancelPatterns = [
+        /\bcancelar\b/i, /\bvaciar\b/i, /\bborrar\b/i, /\breiniciar\b/i, /\beliminar\b/i
+    ];
+
+    for (const pattern of cancelPatterns) {
+        if (pattern.test(clean)) return 'CANCELAR';
+    }
+    
+    for (const pattern of noPatterns) {
+        if (pattern.test(clean)) return 'FINALIZAR';
+    }
+    
+    for (const pattern of yesPatterns) {
+        if (pattern.test(clean)) return 'SI';
+    }
+    
+    return null;
+}
+
 function getValidState(input) {
     const inputClean = input.trim();
     const idx = parseInt(inputClean);
@@ -950,7 +1019,10 @@ async function processMessageLogic(phone, text, senderName) {
             }
         }
         else if (step === 'choosing_branch') {
-            if (text.toUpperCase().trim() === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
+            const spokenIntent = parseSpokenIntent(text);
+            const normalizedText = spokenIntent || text.toUpperCase().trim();
+            
+            if (normalizedText === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
                 delete userSearchSessions[phone];
                 if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 else {
@@ -959,14 +1031,14 @@ async function processMessageLogic(phone, text, senderName) {
                 }
                 return;
             }
-            if (text.toUpperCase().trim() === 'OTRA' || text.toUpperCase().trim() === 'OTRO') {
+            if (normalizedText === 'OTRA' || normalizedText === 'OTRO' || normalizedText === 'SI') {
                 delete userSearchSessions[phone];
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
                 return;
             }
 
-            const optionIndex = parseInt(text);
+            const optionIndex = parseSpokenNumber(text);
             const sessionData = userSearchSessions[phone];
             
             if (sessionData && sessionData[optionIndex]) {
@@ -976,8 +1048,8 @@ async function processMessageLogic(phone, text, senderName) {
                 await sendMetaMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
                 sendMetaVoiceNote(phone, `¿Cuántas piezas necesitas de ${selection.part.description}? Por favor responde escribiendo solo el número.`).catch(e => console.error("TTS error:", e));
             } else {
-                await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o envía *REINICIAR*.");
-                sendMetaVoiceNote(phone, "Opción inválida. Usa el botón de la lista en tu pantalla o envía REINICIAR.").catch(e => console.error("TTS error:", e));
+                await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o escribe el número de opción correspondiente.");
+                sendMetaVoiceNote(phone, "Opción inválida. Usa el botón de la lista en tu pantalla o menciona el número de opción correspondiente.").catch(e => console.error("TTS error:", e));
             }
         }
         else if (step === 'asking_quantity') {
@@ -994,7 +1066,7 @@ async function processMessageLogic(phone, text, senderName) {
                 return;
             }
 
-            const quantity = parseInt(text);
+            const quantity = parseSpokenNumber(text);
             if (isNaN(quantity) || quantity <= 0) {
                 await sendMetaMessage(phone, "⚠️ Por favor ingresa un número válido (ej. 1, 2, 3), o responde *REGRESAR* para ver las opciones.");
                 sendMetaVoiceNote(phone, "Por favor ingresa un número de piezas válido, o responde REGRESAR para ver las opciones de sucursales.").catch(e => console.error("TTS error:", e));
@@ -1037,7 +1109,8 @@ async function processMessageLogic(phone, text, senderName) {
             sendMetaVoiceNote(phone, `¡Pieza agregada a tu carrito! Llevas ${userCarts[phone].length} artículo en tu pedido. ¿Deseas agregar otra refacción, finalizar el pedido o cancelar todo? Selecciona en tu pantalla.`).catch(e => console.error("TTS error:", e));
         }
         else if (step === 'asking_more') {
-            const res = text.toUpperCase().trim();
+            const spokenIntent = parseSpokenIntent(text);
+            const res = spokenIntent || text.toUpperCase().trim();
             if (res === 'SI' || res === 'SÍ' || res === 'S') {
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
@@ -1058,7 +1131,7 @@ async function processMessageLogic(phone, text, senderName) {
                 await sendMetaMessage(phone, msg);
                 sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
             } else {
-                await sendMetaMessage(phone, "⚠️ Por favor presiona uno de los botones o escribe SI, NO o CANCELAR.");
+                await sendMetaMessage(phone, "⚠️ Por favor presiona uno de los botones o responde de forma clara.");
             }
         }
         else if (step === 'asking_name') {
