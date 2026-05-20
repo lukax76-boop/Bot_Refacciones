@@ -901,7 +901,10 @@ async function processMessageLogic(phone, text, senderName) {
             sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
         }
         else if (step === 'asking_part') {
-            if (text.toUpperCase().trim() === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
+            const spokenIntent = parseSpokenIntent(text);
+            const normalizedText = spokenIntent || text.toUpperCase().trim();
+
+            if ((normalizedText === 'FINALIZAR' || normalizedText === 'F') && userCarts[phone] && userCarts[phone].length > 0) {
                 if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 else {
                     await updateUser(phone, { step: 'asking_name' });
@@ -909,6 +912,15 @@ async function processMessageLogic(phone, text, senderName) {
                     await sendMetaMessage(phone, msg);
                     sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 }
+                return;
+            }
+
+            if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
+                delete userSearchSessions[phone];
+                delete userCarts[phone];
+                const msg = "🔄 *Conversación reiniciada*. Dime qué refacción buscas:";
+                await sendMetaMessage(phone, msg);
+                sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 return;
             }
 
@@ -941,10 +953,33 @@ async function processMessageLogic(phone, text, senderName) {
             const results = await searchParts(text, state);
             
             if (results.length === 0) {
+                // Hacer búsqueda global (nacional)
+                const globalResults = await searchParts(text, null);
+                if (globalResults.length > 0) {
+                    userSearchSessions[phone] = { type: 'foreign_pending', query: text, results: globalResults };
+                    await updateUser(phone, { step: 'asking_foreign' });
+                    
+                    const msg = `💡 No encontramos "${text}" en sucursales de *${state}*.\n\nSin embargo, detectamos que la pieza *sí está disponible* en sucursales foráneas (de otros estados).\n\n¿Deseas que te mostremos las opciones disponibles de otros estados para solicitarla de allá?`;
+                    
+                    await sendMetaMessage(phone, null, 'interactive', {
+                        type: "button",
+                        body: { text: msg },
+                        action: {
+                            buttons: [
+                                { type: "reply", reply: { id: "VER_FORANEAS", title: "SÍ, Ver Foráneas" } },
+                                { type: "reply", reply: { id: "BUSCAR_OTRA", title: "NO, Buscar Otra" } }
+                            ]
+                        }
+                    });
+                    
+                    sendMetaVoiceNote(phone, `No encontramos la refacción en sucursales de tu estado, pero sí está disponible en sucursales de otros estados. ¿Deseas ver las opciones foráneas? Selecciona sí o no en tu pantalla.`).catch(e => console.error("TTS error:", e));
+                    return;
+                }
+                
                 await logAnalytics({ phone_number: phone, search_query: text, found: false, state: state });
                 let fallbackMsg = `❌ Lo siento, no pudimos encontrar "${text}" en sucursales de ${state}.\n\nSimplemente escribe el nombre de otra pieza para buscar.`;
-                if (userCarts[phone] && userCarts[phone].length > 0) fallbackMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar pedido, o *REINICIAR* para vaciar el carrito).*`;
-                else fallbackMsg += `\n\n*(Opcional: Envía ESTADO para cambiar la zona, o *REINICIAR* para volver al menú).*`;
+                if (userCarts[phone] && userCarts[phone].length > 0) fallbackMsg += `\n\n*(Opcional: Envía *[F]* para confirmar pedido, o *[V]* para vaciar el carrito).*`;
+                else fallbackMsg += `\n\n*(Opcional: Envía ESTADO para cambiar la zona, o *[V]* para volver al menú).*`;
                 await sendMetaMessage(phone, fallbackMsg);
                 sendMetaVoiceNote(phone, fallbackMsg).catch(e => console.error("TTS error:", e));
             } else {
@@ -976,14 +1011,17 @@ async function processMessageLogic(phone, text, senderName) {
                         validItemsFound++;
                         textBody += `📦 *${item.part.part_number}* - ${item.part.description} ($${item.part.price})\n`;
                         branchesWithStock.forEach(inv => {
-                            optionsData[optionCounter] = { part: item.part, branch: inv };
-                            textBody += `   👉 *[${optionCounter}]* ${inv.branch_name} (Stock: ${inv.stock})\n`;
-                            sections[0].rows.push({
-                                id: optionCounter.toString(),
-                                title: `[${optionCounter}] ${inv.branch_name}`.substring(0, 24).trim(),
-                                description: `Stock: ${inv.stock} | ${item.part.description} ($${item.part.price})`.substring(0, 72)
-                            });
-                            optionCounter++;
+                            const maxBranches = cart.length > 0 ? 7 : 8;
+                            if (optionCounter <= maxBranches) {
+                                optionsData[optionCounter] = { part: item.part, branch: inv };
+                                textBody += `   👉 *[${optionCounter}]* ${inv.branch_name} (Stock: ${inv.stock})\n`;
+                                sections[0].rows.push({
+                                    id: optionCounter.toString(),
+                                    title: `[${optionCounter}] ${inv.branch_name}`.substring(0, 24).trim(),
+                                    description: `Stock: ${inv.stock} | ${item.part.description} ($${item.part.price})`.substring(0, 72)
+                                });
+                                optionCounter++;
+                            }
                         });
                         textBody += `\n`;
                     }
@@ -991,13 +1029,13 @@ async function processMessageLogic(phone, text, senderName) {
                 
                 if (validItemsFound === 0) {
                     let alertMsg = `⚠️ La refacción "${text}" existe en ${state}, pero el inventario disponible ya lo tienes reservado en tu carrito actual.\n\nEscribe el nombre de otra pieza para seguir buscando.`;
-                    if (userCarts[phone] && userCarts[phone].length > 0) alertMsg += `\n\n*(Opcional: Envía *FINALIZAR* para confirmar tu pedido).*`;
+                    if (userCarts[phone] && userCarts[phone].length > 0) alertMsg += `\n\n*(Opcional: Envía *[F]* para confirmar tu pedido).*`;
                     await sendMetaMessage(phone, alertMsg);
                     sendMetaVoiceNote(phone, alertMsg).catch(e => console.error("TTS error:", e));
                 } else {
-                    sections[0].rows.push({ id: "OTRA", title: "Buscar otra pieza" });
-                    if (cart.length > 0) sections[0].rows.push({ id: "FINALIZAR", title: "Finalizar pedido" });
-                    sections[0].rows.push({ id: "REINICIAR", title: "Vaciar y reiniciar" });
+                    sections[0].rows.push({ id: "O", title: "[O] Buscar otra pieza", description: "Buscar una refacción diferente" });
+                    if (cart.length > 0) sections[0].rows.push({ id: "F", title: "[F] Finalizar pedido", description: "Confirmar y procesar tu pedido actual" });
+                    sections[0].rows.push({ id: "V", title: "[V] Vaciar y reiniciar", description: "Borrar el carrito y comenzar de nuevo" });
 
                     userSearchSessions[phone] = optionsData;
                     await updateUser(phone, { step: 'choosing_branch' });
@@ -1007,10 +1045,17 @@ async function processMessageLogic(phone, text, senderName) {
                         sections[0].rows = sections[0].rows.slice(0, 10);
                     }
                     
+                    let optionsText = `------------------\n`;
+                    optionsText += `👉 *[O]* Buscar otra pieza\n`;
+                    if (cart.length > 0) {
+                        optionsText += `👉 *[F]* Finalizar pedido\n`;
+                    }
+                    optionsText += `👉 *[V]* Vaciar y reiniciar\n\n`;
+                    
                     await sendMetaMessage(phone, null, 'interactive', {
                         type: "list",
                         header: { type: "text", text: `🔎 Resultados de búsqueda` },
-                        body: { text: textBody + "Selecciona una opción de la lista táctil o escribe el número correspondiente (ej. 1) para elegir:" },
+                        body: { text: textBody + optionsText + "Selecciona una opción de la lista táctil o escribe el número o letra correspondiente (ej. 1, O, V) para elegir:" },
                         footer: { text: "Selecciona una sucursal" },
                         action: { button: "Ver Opciones", sections: sections }
                     });
@@ -1018,11 +1063,119 @@ async function processMessageLogic(phone, text, senderName) {
                 }
             }
         }
+        else if (step === 'asking_foreign') {
+            const spokenIntent = parseSpokenIntent(text);
+            const normalizedText = spokenIntent || text.toUpperCase().trim();
+
+            if (normalizedText === 'SI' || normalizedText === 'SÍ' || normalizedText === 'VER_FORANEAS') {
+                const sessionData = userSearchSessions[phone];
+                if (!sessionData || !sessionData.results) {
+                    await sendMetaMessage(phone, "⚠️ Ocurrió un problema al recuperar tu búsqueda. Por favor escribe qué refacción buscas para comenzar de nuevo:");
+                    await updateUser(phone, { step: 'asking_part' });
+                    return;
+                }
+
+                const results = sessionData.results;
+                const cart = userCarts[phone] || [];
+                let validItemsFound = 0;
+                let optionsData = {};
+                let optionCounter = 1;
+                let sections = [{ title: "Resultados Foráneos", rows: [] }];
+                let textBody = `✅ *Resultados encontrados en sucursales foráneas:*\n\n`;
+
+                results.forEach((item) => {
+                    let branchesWithStock = [];
+                    item.inventory.forEach(inv => {
+                        let cartQuantity = 0;
+                        for (const cartItem of cart) {
+                            if (cartItem.part.part_number === item.part.part_number && cartItem.branch.branch_id === inv.branch_id) {
+                                cartQuantity += cartItem.quantity;
+                            }
+                        }
+                        const actualStock = inv.stock - cartQuantity;
+                        if (actualStock > 0) branchesWithStock.push({ ...inv, stock: actualStock });
+                    });
+                    
+                    if (branchesWithStock.length > 0) {
+                        validItemsFound++;
+                        textBody += `📦 *${item.part.part_number}* - ${item.part.description} ($${item.part.price})\n`;
+                        branchesWithStock.forEach(inv => {
+                            const maxBranches = cart.length > 0 ? 7 : 8;
+                            if (optionCounter <= maxBranches) {
+                                optionsData[optionCounter] = { part: item.part, branch: inv };
+                                textBody += `   👉 *[${optionCounter}]* ${inv.branch_name} (${inv.branch_state || 'Foránea'}) (Stock: ${inv.stock})\n`;
+                                
+                                // Truncar título a 24 caracteres máximo de WhatsApp
+                                const rowTitle = `[${optionCounter}] ${inv.branch_name}`.substring(0, 24).trim();
+                                // Truncar descripción a 72 caracteres máximo de WhatsApp
+                                const stateText = inv.branch_state ? ` (${inv.branch_state})` : '';
+                                const rowDesc = `Stock: ${inv.stock}${stateText} | ${item.part.description} ($${item.part.price})`.substring(0, 72);
+                                
+                                sections[0].rows.push({
+                                    id: optionCounter.toString(),
+                                    title: rowTitle,
+                                    description: rowDesc
+                                });
+                                optionCounter++;
+                            }
+                        });
+                        textBody += `\n`;
+                    }
+                });
+
+                if (validItemsFound === 0) {
+                    await sendMetaMessage(phone, "⚠️ Lo sentimos, el inventario foráneo de esta pieza ya lo tienes reservado en tu carrito actual.\n\nEscribe el nombre de otra pieza para seguir buscando.");
+                    await updateUser(phone, { step: 'asking_part' });
+                    delete userSearchSessions[phone];
+                } else {
+                    sections[0].rows.push({ id: "O", title: "[O] Buscar otra pieza", description: "Buscar una refacción diferente" });
+                    if (cart.length > 0) sections[0].rows.push({ id: "F", title: "[F] Finalizar pedido", description: "Confirmar y procesar tu pedido actual" });
+                    sections[0].rows.push({ id: "V", title: "[V] Vaciar y reiniciar", description: "Borrar el carrito y comenzar de nuevo" });
+
+                    userSearchSessions[phone] = optionsData;
+                    await updateUser(phone, { step: 'choosing_branch' });
+
+                    // Asegurarse de no exceder el límite de 10 rows de WhatsApp
+                    if (sections[0].rows.length > 10) {
+                        sections[0].rows = sections[0].rows.slice(0, 10);
+                    }
+
+                    let optionsText = `------------------\n`;
+                    optionsText += `👉 *[O]* Buscar otra pieza\n`;
+                    if (cart.length > 0) {
+                        optionsText += `👉 *[F]* Finalizar pedido\n`;
+                    }
+                    optionsText += `👉 *[V]* Vaciar y reiniciar\n\n`;
+
+                    await sendMetaMessage(phone, null, 'interactive', {
+                        type: "list",
+                        header: { type: "text", text: `🔎 Opciones Foráneas` },
+                        body: { text: textBody + optionsText + "Selecciona una sucursal foránea de la lista táctil o escribe el número o letra correspondiente (ej. 1, O, V) para elegir:" },
+                        footer: { text: "Selecciona una sucursal foránea" },
+                        action: { button: "Ver Opciones", sections: sections }
+                    });
+                    sendMetaVoiceNote(phone, "Hemos encontrado las siguientes sucursales foráneas. Por favor presiona el botón Ver Opciones en tu pantalla para elegir.").catch(e => console.error("TTS error:", e));
+                }
+            } else if (normalizedText === 'FINALIZAR' || normalizedText === 'CANCELAR' || normalizedText === 'NO' || normalizedText === 'BUSCAR_OTRA' || normalizedText === 'O') {
+                delete userSearchSessions[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "Entendido. Dime qué *otra refacción* deseas buscar:");
+                sendMetaVoiceNote(phone, "Entendido. Escribe o dime qué otra refacción deseas buscar:").catch(e => console.error("TTS error:", e));
+            } else if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
+                delete userSearchSessions[phone];
+                delete userCarts[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
+                sendMetaVoiceNote(phone, "Conversación reiniciada. Dime qué refacción buscas:").catch(e => console.error("TTS error:", e));
+            } else {
+                await sendMetaMessage(phone, "⚠️ Por favor presiona uno de los botones (SÍ / NO) o responde de forma clara si deseas ver las opciones de otros estados.");
+            }
+        }
         else if (step === 'choosing_branch') {
             const spokenIntent = parseSpokenIntent(text);
             const normalizedText = spokenIntent || text.toUpperCase().trim();
             
-            if (normalizedText === 'FINALIZAR' && userCarts[phone] && userCarts[phone].length > 0) {
+            if ((normalizedText === 'FINALIZAR' || normalizedText === 'F') && userCarts[phone] && userCarts[phone].length > 0) {
                 delete userSearchSessions[phone];
                 if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 else {
@@ -1031,10 +1184,17 @@ async function processMessageLogic(phone, text, senderName) {
                 }
                 return;
             }
-            if (normalizedText === 'OTRA' || normalizedText === 'OTRO' || normalizedText === 'SI') {
+            if (normalizedText === 'OTRA' || normalizedText === 'OTRO' || normalizedText === 'SI' || normalizedText === 'O') {
                 delete userSearchSessions[phone];
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
+                return;
+            }
+            if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
+                delete userSearchSessions[phone];
+                delete userCarts[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
                 return;
             }
 
@@ -1048,12 +1208,15 @@ async function processMessageLogic(phone, text, senderName) {
                 await sendMetaMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
                 sendMetaVoiceNote(phone, `¿Cuántas piezas necesitas de ${selection.part.description}? Por favor responde escribiendo solo el número.`).catch(e => console.error("TTS error:", e));
             } else {
-                await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o escribe el número de opción correspondiente.");
-                sendMetaVoiceNote(phone, "Opción inválida. Usa el botón de la lista en tu pantalla o menciona el número de opción correspondiente.").catch(e => console.error("TTS error:", e));
+                await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o escribe el número o letra correspondiente (ej. 1, O, V) para elegir.");
+                sendMetaVoiceNote(phone, "Opción inválida. Usa el botón de la lista en tu pantalla o menciona el número o letra de opción correspondiente.").catch(e => console.error("TTS error:", e));
             }
         }
         else if (step === 'asking_quantity') {
-            if (text.toUpperCase().trim() === 'REGRESAR') {
+            const spokenIntent = parseSpokenIntent(text);
+            const normalizedText = spokenIntent || text.toUpperCase().trim();
+
+            if (normalizedText === 'REGRESAR') {
                 const sessionData = userSearchSessions[phone];
                 if (!sessionData) {
                     await sendMetaMessage(phone, "⚠️ Tu búsqueda expiró. Por favor, escribe 'Reiniciar' e intenta de nuevo.");
@@ -1063,6 +1226,36 @@ async function processMessageLogic(phone, text, senderName) {
                 await updateUser(phone, { step: 'choosing_branch' });
                 delete userPendingItems[phone];
                 await sendMetaMessage(phone, `✅ Regresando a opciones previas... Selecciona de la lista de arriba nuevamente o envía *REINICIAR*.`);
+                return;
+            }
+
+            if (normalizedText === 'OTRA' || normalizedText === 'OTRO' || normalizedText === 'SI' || normalizedText === 'O') {
+                delete userSearchSessions[phone];
+                delete userPendingItems[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
+                return;
+            }
+
+            if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
+                delete userSearchSessions[phone];
+                delete userPendingItems[phone];
+                delete userCarts[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
+                return;
+            }
+
+            if ((normalizedText === 'FINALIZAR' || normalizedText === 'F') && userCarts[phone] && userCarts[phone].length > 0) {
+                delete userSearchSessions[phone];
+                delete userPendingItems[phone];
+                if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
+                else {
+                    await updateUser(phone, { step: 'asking_name' });
+                    const msg = "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?";
+                    await sendMetaMessage(phone, msg);
+                    sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
+                }
                 return;
             }
 
@@ -1100,22 +1293,22 @@ async function processMessageLogic(phone, text, senderName) {
                 body: { text: `✅ ¡Pieza agregada a tu carrito! (Llevas ${userCarts[phone].length} artículo/s).\n\n¿Deseas agregar otra refacción a tu pedido?` },
                 action: {
                     buttons: [
-                        { type: "reply", reply: { id: "SI", title: "SÍ, Buscar Otra" } },
-                        { type: "reply", reply: { id: "FINALIZAR", title: "FINALIZAR Pedido" } },
-                        { type: "reply", reply: { id: "CANCELAR", title: "CANCELAR Todo" } }
+                        { type: "reply", reply: { id: "O", title: "Buscar Otra [O]" } },
+                        { type: "reply", reply: { id: "F", title: "Finalizar [F]" } },
+                        { type: "reply", reply: { id: "V", title: "Vaciar Todo [V]" } }
                     ]
                 }
             });
-            sendMetaVoiceNote(phone, `¡Pieza agregada a tu carrito! Llevas ${userCarts[phone].length} artículo en tu pedido. ¿Deseas agregar otra refacción, finalizar el pedido o cancelar todo? Selecciona en tu pantalla.`).catch(e => console.error("TTS error:", e));
+            sendMetaVoiceNote(phone, `¡Pieza agregada a tu carrito! Llevas ${userCarts[phone].length} artículo en tu pedido. ¿Deseas agregar otra refacción, finalizar el pedido o vaciar el carrito? Selecciona en tu pantalla o escribe O, F, V.`).catch(e => console.error("TTS error:", e));
         }
         else if (step === 'asking_more') {
             const spokenIntent = parseSpokenIntent(text);
             const res = spokenIntent || text.toUpperCase().trim();
-            if (res === 'SI' || res === 'SÍ' || res === 'S') {
+            if (res === 'SI' || res === 'SÍ' || res === 'S' || res === 'O') {
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
                 sendMetaVoiceNote(phone, "Entendido. Dime qué otra refacción buscas:").catch(e => console.error("TTS error:", e));
-            } else if (res === 'NO' || res === 'N' || res === 'FINALIZAR') {
+            } else if (res === 'NO' || res === 'N' || res === 'FINALIZAR' || res === 'F') {
                 if (user.client_name && user.client_number) {
                     await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 } else {
@@ -1124,7 +1317,7 @@ async function processMessageLogic(phone, text, senderName) {
                     await sendMetaMessage(phone, msg);
                     sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 }
-            } else if (res === 'CANCELAR') {
+            } else if (res === 'CANCELAR' || res === 'V') {
                 delete userCarts[phone];
                 await updateUser(phone, { step: 'asking_part' });
                 const msg = "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción buscas ahora:";

@@ -126,10 +126,15 @@ async function searchParts(queryText, state) {
     // Ahora buscamos inventario de estas partes en el estado específico
     const partNumbers = parts.map(p => p.part_number);
     
-    let { data: branches, error: err2 } = await supabase
+    let queryBranches = supabase
         .from('branches')
-        .select('id, name, address, agent_phone')
-        .ilike('state', `%${state}%`);
+        .select('id, name, address, agent_phone, state');
+        
+    if (state) {
+        queryBranches = queryBranches.ilike('state', `%${state}%`);
+    }
+    
+    let { data: branches, error: err2 } = await queryBranches;
 
     if (err2 || !branches || branches.length === 0) return [];
 
@@ -156,6 +161,7 @@ async function searchParts(queryText, state) {
                     branch_name: b.name,
                     branch_address: b.address,
                     agent_phone: b.agent_phone,
+                    branch_state: b ? b.state : null,
                     stock: inv.stock
                 };
             });
