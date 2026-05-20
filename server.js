@@ -480,6 +480,9 @@ async function sendMetaMessage(phone, content, type = 'text', interactiveOptions
     }
 
     let to = phone.replace('@c.us', '').replace('@lid', '').replace(/\+/g, '').trim();
+    if (to.startsWith('521') && to.length === 13) {
+        to = '52' + to.substring(3);
+    }
     if (to.length === 10) to = '52' + to;
 
     let data = {
@@ -653,6 +656,9 @@ async function sendMetaVoiceNote(phone, text) {
     if (!mediaId) return;
 
     let to = phone.replace('@c.us', '').replace('@lid', '').replace(/\+/g, '').trim();
+    if (to.startsWith('521') && to.length === 13) {
+        to = '52' + to.substring(3);
+    }
     if (to.length === 10) to = '52' + to;
 
     const token = process.env.META_ACCESS_TOKEN;
