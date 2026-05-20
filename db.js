@@ -16,13 +16,41 @@ if (supabaseUrl && supabaseKey && supabaseUrl !== 'tu_supabase_url_aqui') {
 // ---------------------------------------------------------
 async function getUser(phoneNumber) {
     if (!supabase) return null;
-    let { data, error } = await supabase.from('users').select('*').eq('phone_number', phoneNumber).single();
-    if (error && error.code === 'PGRST116') {
+    
+    // Normalizar a los dos posibles formatos mexicanos (con y sin el '1' móvil)
+    let clean = phoneNumber.replace(/\+/g, '').trim();
+    let queryNumbers = [clean];
+    
+    if (clean.startsWith('521') && clean.length === 13) {
+        const withoutOne = '52' + clean.substring(3);
+        queryNumbers.push(withoutOne);
+    } else if (clean.startsWith('52') && clean.length === 12) {
+        const withOne = '521' + clean.substring(2);
+        queryNumbers.push(withOne);
+    }
+
+    let { data, error } = await supabase.from('users').select('*').in('phone_number', queryNumbers).limit(1).maybeSingle();
+    
+    if (error) {
+        console.error("Error fetching user:", error);
+        return null;
+    }
+
+    if (!data) {
         const newUser = { phone_number: phoneNumber, language: null, current_state: null, step: 'idle' };
         const { data: inserted, error: insErr } = await supabase.from('users').insert([newUser]).select().single();
         if (insErr) { console.error("Error creating user:", insErr); return null; }
         return inserted;
     }
+
+    // Si el formato en la base de datos es diferente al recibido en el webhook, 
+    // lo actualizamos para que coincidan en futuras consultas directas
+    if (data.phone_number !== phoneNumber) {
+        console.log(`🔄 Actualizando número del cliente en DB de ${data.phone_number} a ${phoneNumber} para consistencia.`);
+        await supabase.from('users').update({ phone_number: phoneNumber }).eq('phone_number', data.phone_number);
+        data.phone_number = phoneNumber;
+    }
+
     return data;
 }
 
