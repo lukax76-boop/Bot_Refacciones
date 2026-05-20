@@ -908,13 +908,15 @@ async function processMessageLogic(phone, text, senderName) {
                         textBody += `📦 *${item.part.part_number}* - ${item.part.description} ($${item.part.price})\n`;
                         branchesWithStock.forEach(inv => {
                             optionsData[optionCounter] = { part: item.part, branch: inv };
+                            textBody += `   👉 *[${optionCounter}]* ${inv.branch_name} (Stock: ${inv.stock})\n`;
                             sections[0].rows.push({
                                 id: optionCounter.toString(),
-                                title: inv.branch_name.substring(0, 24).trim(),
-                                description: `Stock: ${inv.stock} | ${item.part.part_number} - $${item.part.price}`.substring(0, 72)
+                                title: `[${optionCounter}] ${inv.branch_name}`.substring(0, 24).trim(),
+                                description: `Stock: ${inv.stock} | ${item.part.description} ($${item.part.price})`.substring(0, 72)
                             });
                             optionCounter++;
                         });
+                        textBody += `\n`;
                     }
                 });
                 
@@ -939,7 +941,7 @@ async function processMessageLogic(phone, text, senderName) {
                     await sendMetaMessage(phone, null, 'interactive', {
                         type: "list",
                         header: { type: "text", text: `🔎 Resultados de búsqueda` },
-                        body: { text: textBody + "\nSelecciona una opción de la lista:" },
+                        body: { text: textBody + "Selecciona una opción de la lista táctil o escribe el número correspondiente (ej. 1) para elegir:" },
                         footer: { text: "Selecciona una sucursal" },
                         action: { button: "Ver Opciones", sections: sections }
                     });
