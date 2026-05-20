@@ -645,44 +645,8 @@ async function uploadAudioToWhatsApp(audioBuffer) {
 }
 
 async function sendMetaVoiceNote(phone, text) {
-    const cleanText = cleanTextForTTS(text);
-    if (!cleanText) return;
-
-    console.log(`🎙️ Generando nota de voz (TTS) para ${phone}: "${cleanText.substring(0, 50)}..."`);
-    const audioBuffer = await generateSpeechBuffer(cleanText);
-    if (!audioBuffer) return;
-
-    const mediaId = await uploadAudioToWhatsApp(audioBuffer);
-    if (!mediaId) return;
-
-    let to = phone.replace('@c.us', '').replace('@lid', '').replace(/\+/g, '').trim();
-    if (to.startsWith('521') && to.length === 13) {
-        to = '52' + to.substring(3);
-    }
-    if (to.length === 10) to = '52' + to;
-
-    const token = process.env.META_ACCESS_TOKEN;
-    const phoneId = process.env.META_PHONE_NUMBER_ID;
-
-    try {
-        await axios.post(
-            `https://graph.facebook.com/v19.0/${phoneId}/messages`,
-            {
-                messaging_product: "whatsapp",
-                to: to,
-                type: "audio",
-                audio: {
-                    id: mediaId
-                }
-            },
-            {
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            }
-        );
-        console.log(`🎙️ Nota de voz (TTS) enviada exitosamente a ${to}`);
-    } catch (error) {
-        console.error("Error sending audio message:", error.response?.data || error.message);
-    }
+    // Desactivado a petición del usuario: el bot interpreta audios entrantes pero responde únicamente por texto
+    return;
 }
 
 async function sendStateOptionsList(phone, user, customText = null) {
