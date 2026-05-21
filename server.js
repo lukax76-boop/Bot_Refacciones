@@ -1397,8 +1397,9 @@ async function processMessageLogic(phone, text, senderName) {
                     }
 
                     // No stock at all
+                    await logAnalytics({ phone_number: phone, search_query: text, found: false, state: state });
                     await updateUser(phone, { step: 'help_no_stock_options' });
-                    const noStockMsg = `⚠️ Informamos que, por el momento, no se encontraron resultados en existencia en ninguna de nuestras sucursales para los números de parte sugeridos.\n\n¿Qué deseas hacer ahora?\n\n👉 Escribe *[O]* para buscar otra refacción.\n👉 Escribe *[V]* para vaciar carrito y reiniciar.\n👉 Escribe *[R]* para regresar al menú principal.`;
+                    const noStockMsg = `⚠️ *Lamentamos informarle que, por el momento, no tenemos disponible la pieza solicitada en ninguna de nuestras sucursales.* No se encontraron existencias en el inventario nacional para los números de parte sugeridos.\n\n¿Qué deseas hacer ahora?\n\n👉 Escribe *[O]* para buscar otra refacción.\n👉 Escribe *[V]* para vaciar carrito y reiniciar.\n👉 Escribe *[R]* para regresar al menú principal.`;
                     await sendMetaMessage(phone, noStockMsg);
                     sendMetaVoiceNote(phone, cleanTextForTTS(noStockMsg)).catch(e => console.error("TTS error:", e));
                 } else {

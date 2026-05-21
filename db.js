@@ -93,7 +93,13 @@ async function searchParts(queryText, state) {
 
     // 2. Búsqueda inteligente (Fuzzy Search) si no hay resultados exactos
     if ((err1 || !parts || parts.length === 0) && queryTrimmed.includes(' ')) {
-        const words = queryTrimmed.split(' ').filter(w => w.length > 2); // ignorar conectores cortos
+        const stopWords = new Set(['para', 'con', 'del', 'los', 'las', 'una', 'uno', 'por', 'sus', 'que', 'como', 'este', 'esta', 'estos', 'estas', 'sino', 'pero', 'mas', 'más', 'entre', 'sobre', 'hacia', 'hasta', 'desde']);
+        
+        // Separar por espacios, quitar acentos y limpiar puntuación
+        const words = queryTrimmed.split(/\s+/)
+            .map(w => w.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,""))
+            .filter(w => w.length > 2 && !stopWords.has(w));
+            
         if (words.length > 0) {
             const orConditions = words.map(w => `description.ilike.%${w}%,part_number.ilike.%${w}%`).join(',');
             let { data: fuzzyParts } = await supabase
@@ -102,21 +108,67 @@ async function searchParts(queryText, state) {
                 .or(orConditions);
                 
             if (fuzzyParts && fuzzyParts.length > 0) {
-                // Algoritmo de puntuación (Score)
+                const firstWord = words[0]; // Sustantivo principal del producto
+                const scoredParts = [];
+                
                 fuzzyParts.forEach(p => {
-                    p.score = 0;
-                    const descLower = (p.description || '').toLowerCase();
-                    const partLower = (p.part_number || '').toLowerCase();
-                    words.forEach(w => {
-                        const wordLower = w.toLowerCase();
-                        if (descLower.includes(wordLower)) p.score++;
-                        if (partLower.includes(wordLower)) p.score += 2; // Pesa más si coincide con el número de parte
+                    let score = 0;
+                    let matchedCount = 0;
+                    
+                    const descNorm = (p.description || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    const partNorm = (p.part_number || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    
+                    words.forEach((w, idx) => {
+                        let wordMatched = false;
+                        if (descNorm.includes(w)) {
+                            score++;
+                            wordMatched = true;
+                        }
+                        if (partNorm.includes(w)) {
+                            score += 2; // Pesa más si coincide con el número de parte
+                            wordMatched = true;
+                        }
+                        
+                        if (wordMatched) {
+                            matchedCount++;
+                            if (idx === 0) {
+                                score += 10; // Gran bonus si coincide con el sustantivo principal
+                            }
+                        }
                     });
+                    
+                    // REGLA DE RELEVANCIA ESTRICTA:
+                    // Evita traer partes basura (ej. lija, ligas, enchufes) si el usuario buscó "bateria" o "balatas".
+                    let isRelevant = false;
+                    if (words.length === 1) {
+                        isRelevant = matchedCount >= 1;
+                    } else if (words.length === 2) {
+                        isRelevant = matchedCount >= 2 || (matchedCount === 1 && descNorm.includes(firstWord));
+                    } else {
+                        // Si hay 3 o más palabras clave, requerimos al menos 2 coincidencias,
+                        // Y que una de ellas sea el primer término de búsqueda (el sustantivo principal),
+                        // O que se coincida con el 60% de los términos de búsqueda totales.
+                        const matchesFirstWord = descNorm.includes(firstWord) || partNorm.includes(firstWord);
+                        const matchRatio = matchedCount / words.length;
+                        isRelevant = (matchedCount >= 2 && matchesFirstWord) || matchRatio >= 0.6;
+                    }
+                    
+                    if (isRelevant) {
+                        p.score = score;
+                        p.matchedCount = matchedCount;
+                        scoredParts.push(p);
+                    }
                 });
                 
-                // Ordenar por las más relevantes y tomar las 5 mejores
-                fuzzyParts.sort((a, b) => b.score - a.score);
-                parts = fuzzyParts.slice(0, 5);
+                // Ordenar por número de palabras clave coincidentes y luego por puntaje
+                scoredParts.sort((a, b) => {
+                    if (b.matchedCount !== a.matchedCount) {
+                        return b.matchedCount - a.matchedCount;
+                    }
+                    return b.score - a.score;
+                });
+                
+                parts = scoredParts.slice(0, 5);
             }
         }
     }
