@@ -724,14 +724,6 @@ async function sendStateOptionsList(phone, user, customText = null) {
         return;
     }
 
-    let rows = availableStatesCache.map((s, idx) => ({
-        id: s.original,
-        title: s.original.substring(0, 24),
-        description: `Ver catálogo de ${s.original}`
-    }));
-
-    if (rows.length > 10) rows = rows.slice(0, 10);
-
     let bodyText = customText;
     if (!bodyText) {
         if (user && user.client_name) {
@@ -741,19 +733,37 @@ async function sendStateOptionsList(phone, user, customText = null) {
         }
     }
 
-    await sendMetaMessage(phone, null, 'interactive', {
-        type: "list",
-        header: { type: "text", text: `📍 Ubicación` },
-        body: { text: bodyText },
-        footer: { text: "Selecciona tu estado" },
-        action: {
-            button: "Ver Estados",
-            sections: [{
-                title: "Estados Disponibles",
-                rows: rows
-            }]
-        }
-    });
+    if (availableStatesCache.length <= 10) {
+        let rows = availableStatesCache.map((s, idx) => ({
+            id: s.original,
+            title: s.original.substring(0, 24),
+            description: `Ver catálogo de ${s.original}`
+        }));
+
+        await sendMetaMessage(phone, null, 'interactive', {
+            type: "list",
+            header: { type: "text", text: `📍 Ubicación` },
+            body: { text: bodyText },
+            footer: { text: "Selecciona tu estado" },
+            action: {
+                button: "Ver Estados",
+                sections: [{
+                    title: "Estados Disponibles",
+                    rows: rows
+                }]
+            }
+        });
+    } else {
+        // Generar un listado de texto numerado completo y elegante
+        let stateMsg = `${bodyText}\n\n`;
+        stateMsg += `📍 *Estados Disponibles:*\n`;
+        availableStatesCache.forEach((s, idx) => {
+            stateMsg += `*${idx + 1}.* ${s.original}\n`;
+        });
+        stateMsg += `\n👉 Escribe el *nombre* de tu estado o el *número* correspondiente para seleccionarlo:`;
+
+        await sendMetaMessage(phone, stateMsg);
+    }
 
     // Enviar también nota de voz de bienvenida de forma asíncrona
     sendMetaVoiceNote(phone, bodyText).catch(e => console.error("Error en TTS asíncrono de Estados:", e));
