@@ -1378,16 +1378,30 @@ async function processMessageLogic(phone, text, senderName) {
                 await sendMetaMessage(phone, clientResponse);
                 sendMetaVoiceNote(phone, cleanTextForTTS(clientResponse)).catch(e => console.error("TTS error:", e));
 
-                // 2. Buscar en Supabase
-                const candidates = responseData.numeros_parte || [];
+                // 2. Buscar en Supabase con logs detallados en tiempo real
+                let candidates = [];
+                if (responseData.numeros_parte) {
+                    if (Array.isArray(responseData.numeros_parte)) {
+                        candidates = responseData.numeros_parte.map(c => String(c).trim()).filter(Boolean);
+                    } else {
+                        candidates = [String(responseData.numeros_parte).trim()].filter(Boolean);
+                    }
+                }
+
                 const state = user.current_state;
-                
+                console.log(`[BUSQUEDA INVENTARIO] Iniciando búsqueda para cliente ${phone} en estado: "${state || 'GLOBAL'}"`);
+                console.log(`[BUSQUEDA INVENTARIO] Números de parte sugeridos por la IA (candidatos):`, candidates);
+
                 let results = [];
                 for (const partNum of candidates) {
                     if (!partNum) continue;
+                    console.log(`[BUSQUEDA INVENTARIO] Buscando coincidencia para "${partNum}" en sucursales de "${state || 'TODAS'}"...`);
                     const partsFound = await searchParts(partNum, state);
                     if (partsFound && partsFound.length > 0) {
+                        console.log(`   • [COMPATIBLE] Encontrada pieza en base de datos para "${partNum}":`, partsFound.map(p => `${p.part.part_number} (${p.inventory.length} sucursales)`).join(', '));
                         results.push(...partsFound);
+                    } else {
+                        console.log(`   • [SIN STOCK REGIONAL] No se encontró stock para "${partNum}" en "${state || 'GLOBAL'}".`);
                     }
                 }
 
@@ -1399,14 +1413,22 @@ async function processMessageLogic(phone, text, senderName) {
                     return true;
                 });
 
+                console.log(`[BUSQUEDA INVENTARIO] Resultados regionales finales con existencias: ${results.length}`);
+
                 if (results.length === 0) {
+                    console.log(`[BUSQUEDA INVENTARIO] Sin existencias regionales. Iniciando búsqueda nacional (global) en sucursales foráneas...`);
+                    
                     // Hacer búsqueda global (nacional) en sucursales foráneas
                     let globalResults = [];
                     for (const partNum of candidates) {
                         if (!partNum) continue;
+                        console.log(`[BUSQUEDA INVENTARIO] Buscando coincidencia global/foránea para "${partNum}"...`);
                         const partsFound = await searchParts(partNum, null);
                         if (partsFound && partsFound.length > 0) {
+                            console.log(`   • [COMPATIBLE FORÁNEO] Encontradas existencias globales para "${partNum}":`, partsFound.map(p => `${p.part.part_number} (${p.inventory.length} sucursales)`).join(', '));
                             globalResults.push(...partsFound);
+                        } else {
+                            console.log(`   • [SIN STOCK GLOBAL] Tampoco hay existencias globales para "${partNum}".`);
                         }
                     }
 
@@ -1418,7 +1440,10 @@ async function processMessageLogic(phone, text, senderName) {
                         return true;
                     });
 
+                    console.log(`[BUSQUEDA INVENTARIO] Resultados globales/foráneos finales: ${globalResults.length}`);
+
                     if (globalResults.length > 0) {
+                        console.log(`[BUSQUEDA INVENTARIO] Ofreciendo existencias foráneas al cliente ${phone}...`);
                         userSearchSessions[phone] = { type: 'foreign_pending', query: text, results: globalResults };
                         await updateUser(phone, { step: 'asking_foreign' });
 
@@ -1434,14 +1459,17 @@ async function processMessageLogic(phone, text, senderName) {
                                 ]
                             }
                         });
+                        console.log(`[BUSQUEDA INVENTARIO] Mensaje de sucursales foráneas enviado exitosamente a ${phone}`);
                         return;
                     }
 
                     // No stock at all
+                    console.log(`[BUSQUEDA INVENTARIO] Sin existencias a nivel nacional. Enviando mensaje de NO DISPONIBILIDAD a ${phone}...`);
                     await logAnalytics({ phone_number: phone, search_query: text, found: false, state: state });
                     await updateUser(phone, { step: 'help_no_stock_options' });
                     const noStockMsg = `⚠️ *Lamentamos informarle que, por el momento, no tenemos disponible la pieza solicitada en ninguna de nuestras sucursales.* No se encontraron existencias en el inventario nacional para los números de parte sugeridos.\n\n¿Qué deseas hacer ahora?\n\n👉 Escribe *[O]* para buscar otra refacción.\n👉 Escribe *[V]* para vaciar carrito y reiniciar.\n👉 Escribe *[R]* para regresar al menú principal.`;
                     await sendMetaMessage(phone, noStockMsg);
+                    console.log(`[BUSQUEDA INVENTARIO] Mensaje de NO DISPONIBILIDAD enviado a ${phone}`);
                     sendMetaVoiceNote(phone, cleanTextForTTS(noStockMsg)).catch(e => console.error("TTS error:", e));
                 } else {
                     // Encontró stock localmente! Presentar opciones al cliente
