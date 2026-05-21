@@ -1482,11 +1482,18 @@ async function processMessageLogic(phone, text, senderName) {
                 console.error("Error en flujo de ayuda de VIN:", err);
                 
                 const isQuotaError = err.message.includes('429') || err.message.toUpperCase().includes('RESOURCE_EXHAUSTED') || err.message.toUpperCase().includes('QUOTA');
+                const isPermissionError = err.message.includes('403') || err.message.toUpperCase().includes('PERMISSION_DENIED') || err.message.toUpperCase().includes('LEAK') || err.message.toUpperCase().includes('API_KEY');
+                
                 if (isQuotaError) {
                     console.error("❌ [API KEY EXHAUSTED] La API Key de Gemini ha agotado su cuota diaria (429 Resource Exhausted). Por favor, configure una GEMINI_API_KEY de pago o con mayor cuota en el archivo .env.");
                     const quotaUserMsg = `⚠️ Nuestro asistente de IA está experimentando una alta demanda en este momento y ha agotado su cuota diaria.\n\nPor favor, intenta de nuevo más tarde, o escribe **REINICIAR** para buscar directamente ingresando el número de parte o seleccionando tu estado sin usar el asistente de IA.`;
                     await sendMetaMessage(phone, quotaUserMsg);
                     sendMetaVoiceNote(phone, cleanTextForTTS(quotaUserMsg)).catch(e => console.error("TTS error:", e));
+                } else if (isPermissionError) {
+                    console.error("❌ [API KEY BLOCKED/LEAKED] La API Key de Gemini ha sido revocada o bloqueada por seguridad (403 Permission Denied - Leaked Key). Por favor, genere una nueva clave de API en Google AI Studio y actualice su archivo .env o variables de entorno en Render.");
+                    const permissionUserMsg = `⚠️ Nuestro asistente de IA está fuera de servicio temporalmente por actualización de seguridad.\n\nPor favor, escribe **REINICIAR** para cotizar directamente ingresando el número de parte o seleccionando tu estado sin usar el asistente de IA.`;
+                    await sendMetaMessage(phone, permissionUserMsg);
+                    sendMetaVoiceNote(phone, cleanTextForTTS(permissionUserMsg)).catch(e => console.error("TTS error:", e));
                 } else {
                     await sendMetaMessage(phone, `❌ Ocurrió un error inesperado al buscar la refacción por VIN: ${err.message}.\n\nPor favor, intenta de nuevo escribiendo tu consulta, o escribe **AYUDA** para reiniciar las instrucciones.`);
                 }

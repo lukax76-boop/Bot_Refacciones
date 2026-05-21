@@ -53,9 +53,12 @@ load_env()
 # Intentamos obtener la API key del entorno
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key or api_key.strip() == "" or api_key == "TU_API_KEY_AQUI":
-    # Llave de respaldo en caso de emergencia, pero se prioriza la del archivo .env
-    api_key = "AIzaSyAHDL2H5kSx3Bbvx7iBf6CEqVcmjEEB2X8"
-    os.environ["GEMINI_API_KEY"] = api_key
+    # No colocamos ninguna clave fija en el código para evitar bloqueos por parte de los sistemas de seguridad de GitHub/Google.
+    # Exigimos que esté presente en el entorno o en el archivo .env
+    raise ValueError("❌ GEMINI_API_KEY_MISSING: La variable de entorno GEMINI_API_KEY no está configurada. Por favor, configúrala en las variables de entorno de tu panel de hosting (Render) o en tu archivo .env.")
+
+if api_key.strip() == "AIzaSyAHDL2H5kSx3Bbvx7iBf6CEqVcmjEEB2X8":
+    raise ValueError("❌ GEMINI_API_KEY_LEAKED: La clave de API de Gemini utilizada ('AIzaSyAHDL2H5kSx3Bbvx7iBf6CEqVcmjEEB2X8') ha sido reportada como filtrada (leaked) y revocada por los sistemas de seguridad de Google. Por favor, genera una nueva clave en Google AI Studio (https://aistudio.google.com/) y actualiza tu archivo .env o las variables de entorno en tu panel de Render.")
 
 # =====================================================================
 # 3. PASO 1: AGENTE DE IA - INTERPRETACIÓN DE FRASE
