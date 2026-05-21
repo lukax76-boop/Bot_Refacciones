@@ -934,7 +934,7 @@ async function processMessageLogic(phone, text, senderName) {
         delete userSearchSessions[phone];
         delete userPendingItems[phone];
         
-        const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN o número de serie de 17 caracteres** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de LSGHD52H3JD216205")*`;
+        const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN o número de serie de 17 caracteres** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000")*`;
         await sendMetaMessage(phone, explanation);
         sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
         return;
