@@ -632,27 +632,39 @@ async function transcribeAudio(audioId) {
 function runVinSearch(queryText) {
     return new Promise((resolve, reject) => {
         const { execFile } = require('child_process');
-        const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
         
-        console.log(`[AYUDA] Ejecutando Python para: "${queryText}"`);
-        execFile(pythonCmd, ['vin_search.py', queryText], { encoding: 'utf8' }, (error, stdout, stderr) => {
-            if (stderr) {
-                console.log(`[Python Debug Stderr]: ${stderr}`);
+        // List of python executables to try in order
+        const candidates = process.platform === 'win32' 
+            ? ['py', 'python', 'python3'] 
+            : ['python3', 'python', 'py'];
+            
+        let index = 0;
+        let lastError = null;
+        let accumulatedStderr = '';
+
+        function tryNext() {
+            if (index >= candidates.length) {
+                return reject(new Error(`Python execution failed: All candidates [${candidates.join(', ')}] failed. Last error: ${lastError?.message}. Stderr: ${accumulatedStderr}`));
             }
-            if (error) {
-                // Fallback to the other command (python/python3)
-                const fallbackCmd = pythonCmd === 'python' ? 'python3' : 'python';
-                execFile(fallbackCmd, ['vin_search.py', queryText], { encoding: 'utf8' }, (fbErr, fbStdout, fbStderr) => {
-                    if (fbStderr) console.log(`[Python Fallback Debug Stderr]: ${fbStderr}`);
-                    if (fbErr) {
-                        return reject(new Error(`Python execution failed: ${fbErr.message}. Stderr: ${fbStderr || stderr}`));
-                    }
-                    resolve(fbStdout);
-                });
-                return;
-            }
-            resolve(stdout);
-        });
+
+            const cmd = candidates[index];
+            console.log(`[AYUDA] Intentando ejecutar Python con comando: "${cmd}" para consulta: "${queryText}"`);
+            
+            execFile(cmd, ['vin_search.py', queryText], { encoding: 'utf8' }, (error, stdout, stderr) => {
+                if (stderr) {
+                    accumulatedStderr += `[${cmd} stderr]: ${stderr}\n`;
+                }
+                if (error) {
+                    lastError = error;
+                    index++;
+                    tryNext();
+                } else {
+                    resolve(stdout);
+                }
+            });
+        }
+
+        tryNext();
     });
 }
 
