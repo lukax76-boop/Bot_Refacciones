@@ -524,11 +524,13 @@ function parseSpokenIntent(text) {
     return null;
 }
 
-function getValidState(input) {
+function getValidState(input, allowIndex = false) {
     const inputClean = input.trim();
-    const idx = parseInt(inputClean);
-    if (!isNaN(idx) && idx > 0 && idx <= availableStatesCache.length) {
-        return availableStatesCache[idx - 1].original;
+    if (allowIndex) {
+        const idx = parseInt(inputClean);
+        if (!isNaN(idx) && idx > 0 && idx <= availableStatesCache.length) {
+            return availableStatesCache[idx - 1].original;
+        }
     }
     let normalizedInput = normalizeString(input);
     if (normalizedInput === 'cdmx' || normalizedInput === 'df') normalizedInput = 'ciudad de mexico';
@@ -974,6 +976,7 @@ async function processMessageLogic(phone, text, senderName) {
                 sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
             }
         } else {
+            await updateUser(phone, { step: 'asking_help_menu_choice' });
             const helpMsg = `📞 *¡Bienvenido a nuestro Servicio de Ayuda!* 📞\n\n*¿Cómo te podemos ayudar?*\n\n1️⃣ *Buscar una Refacción:* Escribe el nombre de la pieza que necesitas (ej: "Filtro de aceite")\n\n2️⃣ *Cambiar de Estado:* Escribe *ESTADO* para cambiar tu zona de búsqueda\n\n3️⃣ *Ver Sucursales:* Escribe *SUCURSALES* para ver nuestro directorio completo\n\n4️⃣ *Mi Carrito:* Escribe *FINALIZAR* para completar tu pedido o *VACIAR* para limpiar el carrito\n\n5️⃣ *Contacto Directo:* Si tienes una pregunta específica, aquí estamos para ayudarte 🤝\n\n💡 *Consejo:* Puedes escribir en voz o texto. Nuestro sistema entiende audios, números de VIN y descripciones de piezas.\n\n¿En qué te podemos asistir hoy?`;
             await sendMetaMessage(phone, helpMsg);
             sendMetaVoiceNote(phone, `Bienvenido al servicio de ayuda. Puedes buscar una refacción, cambiar de estado, ver nuestras sucursales, o completar tu pedido. ¿En qué puedo ayudarte?`).catch(e => console.error("TTS error:", e));
@@ -1004,7 +1007,7 @@ async function processMessageLogic(phone, text, senderName) {
             }
         } 
         else if (step === 'asking_state') {
-            const validState = getValidState(text);
+            const validState = getValidState(text, true);
             if (!validState) {
                 await sendStateOptionsList(phone, user, "⚠️ No logramos reconocer ese estado.\n\nPor favor, selecciona tu *Estado de la República* de la lista táctil:");
                 return;
@@ -1013,6 +1016,67 @@ async function processMessageLogic(phone, text, senderName) {
             const msg = `¡Perfecto! Buscaremos en *${validState}*.\n\nDime qué refacción buscas.`;
             await sendMetaMessage(phone, msg);
             sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
+        }
+        else if (step === 'asking_help_menu_choice') {
+            const cleanText = text.trim();
+            const choice = cleanText.toLowerCase();
+
+            if (choice === '1' || choice.includes('buscar') || choice.includes('refaccion') || choice.includes('refacción')) {
+                await updateUser(phone, { step: 'asking_help_details' });
+                delete userSearchSessions[phone];
+                delete userPendingItems[phone];
+                
+                const savedVin = userVins[phone];
+                if (savedVin) {
+                    const explanation = `Veo que ya registramos el **Identificador (VIN/Serie de Motor): \`${savedVin}\`** en tu sesión. 🚗\n\nSolo escribe la **pieza** que buscas (ej. "filtro de aceite") y la buscaremos para ese mismo vehículo.\n\nSi deseas buscar para un vehículo diferente, ingresa el nuevo **VIN o Serie de Motor** y la pieza.`;
+                    await sendMetaMessage(phone, explanation);
+                    sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+                } else {
+                    const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN (17 caracteres)** o el **Número de Serie de Motor** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000" o "anillos para motor 2WS12345")*`;
+                    await sendMetaMessage(phone, explanation);
+                    sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+                }
+                return;
+            }
+            else if (choice === '2' || choice === 'estado' || choice.includes('cambiar')) {
+                await updateUser(phone, { step: 'asking_state', current_state: null });
+                await sendStateOptionsList(phone, user, "Cambiando de estado... 📍\n¿En qué *Estado de la República* deseas hacer la consulta ahora?");
+                return;
+            }
+            else if (choice === '3' || choice === 'sucursales' || choice.includes('sucursal') || choice.includes('directorio')) {
+                const branchesInfo = await getBranchesDirectory(user.current_state);
+                await sendMetaMessage(phone, branchesInfo);
+                await updateUser(phone, { step: 'asking_part' });
+                return;
+            }
+            else if (choice === '4' || choice === 'finalizar' || choice === 'vaciar' || choice.includes('carrito') || choice.includes('pedido')) {
+                const cart = userCarts[phone] || [];
+                if (cart.length === 0) {
+                    await sendMetaMessage(phone, "🛒 Tu carrito está vacío actualmente.\n\nEscribe el nombre de la pieza que buscas para empezar a agregar artículos.");
+                    await updateUser(phone, { step: 'asking_part' });
+                } else {
+                    let summary = "🛒 *Tu Carrito Actual:*\n\n";
+                    cart.forEach((item, idx) => {
+                        summary += `*${idx + 1}.* ${item.part.part_number} - ${item.part.description} (${item.quantity} pza(s) en sucursal ${item.branch.branch_name}) - $${item.part.price * item.quantity}\n`;
+                    });
+                    summary += `\n👉 Escribe *FINALIZAR* para completar tu pedido.\n👉 Escribe *VACIAR* para limpiar el carrito.`;
+                    await sendMetaMessage(phone, summary);
+                    await updateUser(phone, { step: 'asking_part' });
+                }
+                return;
+            }
+            else if (choice === '5' || choice.includes('contacto') || choice.includes('pregunta') || choice.includes('asesor') || choice.includes('ejecutivo')) {
+                await updateUser(phone, { step: 'asking_part' });
+                const contactMsg = `📞 *Contacto Directo* 🤝\n\nSi tienes una pregunta específica o necesitas asistencia de un ejecutivo, por favor escribe tu mensaje aquí y un asesor se comunicará contigo a la brevedad.\n\nTambién puedes llamarnos al Centro de Atención Telefónica para asistencia inmediata.`;
+                await sendMetaMessage(phone, contactMsg);
+                sendMetaVoiceNote(phone, cleanTextForTTS(contactMsg)).catch(e => console.error("TTS error:", e));
+                return;
+            }
+            else {
+                await updateUser(phone, { step: 'asking_part' });
+                await processMessageLogic(phone, text, senderName);
+                return;
+            }
         }
         else if (step === 'asking_part') {
             const spokenIntent = parseSpokenIntent(text);
@@ -1039,7 +1103,7 @@ async function processMessageLogic(phone, text, senderName) {
                 return;
             }
 
-            const matchedState = getValidState(text);
+            const matchedState = getValidState(text, false);
             if (matchedState) {
                 await updateUser(phone, { current_state: matchedState, step: 'asking_part' });
                 user.current_state = matchedState;
