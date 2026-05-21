@@ -624,6 +624,34 @@ async function transcribeAudio(audioId) {
     }
 }
 
+// Helper: Ejecutar búsqueda híbrida de VIN/refacción en Python
+function runVinSearch(queryText) {
+    return new Promise((resolve, reject) => {
+        const { execFile } = require('child_process');
+        const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        
+        console.log(`[AYUDA] Ejecutando Python para: "${queryText}"`);
+        execFile(pythonCmd, ['vin_search.py', queryText], { encoding: 'utf8' }, (error, stdout, stderr) => {
+            if (stderr) {
+                console.log(`[Python Debug Stderr]: ${stderr}`);
+            }
+            if (error) {
+                // Fallback to the other command (python/python3)
+                const fallbackCmd = pythonCmd === 'python' ? 'python3' : 'python';
+                execFile(fallbackCmd, ['vin_search.py', queryText], { encoding: 'utf8' }, (fbErr, fbStdout, fbStderr) => {
+                    if (fbStderr) console.log(`[Python Fallback Debug Stderr]: ${fbStderr}`);
+                    if (fbErr) {
+                        return reject(new Error(`Python execution failed: ${fbErr.message}. Stderr: ${fbStderr || stderr}`));
+                    }
+                    resolve(fbStdout);
+                });
+                return;
+            }
+            resolve(stdout);
+        });
+    });
+}
+
 // ==========================================
 // 3. TEXT-TO-SPEECH (TTS) HELPERS
 // ==========================================
@@ -877,20 +905,31 @@ async function processMessageLogic(phone, text, senderName) {
         return;
     }
 
+    if (text.toUpperCase().trim() === 'AYUDA') {
+        await updateUser(phone, { step: 'asking_help_details' });
+        delete userSearchSessions[phone];
+        delete userPendingItems[phone];
+        
+        const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN o número de serie de 17 caracteres** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de LSGHD52H3JD216205")*`;
+        await sendMetaMessage(phone, explanation);
+        sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+        return;
+    }
+
     try {
         if (step === 'idle') {
             if (user.current_state) {
                 await updateUser(phone, { step: 'asking_part' });
                 let greeting = `¡Bienvenido al cotizador de refacciones! 🚗`;
                 if (user.client_name) greeting = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗`;
-                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas (puedes enviar un mensaje de voz o texto).\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
+                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nDime qué refacción buscas (puedes enviar un mensaje de voz o texto).\n\nSi aun no estás seguro del número de parte que necesitas, escribe *AYUDA* y te apoyamos.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
                 await sendMetaMessage(phone, greeting);
                 sendMetaVoiceNote(phone, greeting).catch(e => console.error("TTS error:", e));
             } else {
                 const detectedState = detectStateFromPhone(phone);
                 if (detectedState) {
                     await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
-                    const msg = `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nDime qué refacción buscas (audio o texto).\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`;
+                    const msg = `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nDime qué refacción buscas (audio o texto).\n\nSi aun no estás seguro del número de parte que necesitas, escribe *AYUDA* y te apoyamos.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`;
                     await sendMetaMessage(phone, msg);
                     sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 } else {
@@ -1073,6 +1112,219 @@ async function processMessageLogic(phone, text, senderName) {
                 }
             }
         }
+        else if (step === 'asking_help_details') {
+            const spokenIntent = parseSpokenIntent(text);
+            const normalizedText = spokenIntent || text.toUpperCase().trim();
+
+            if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
+                delete userSearchSessions[phone];
+                delete userCarts[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
+                return;
+            }
+            if (normalizedText === 'REGRESAR' || normalizedText === 'R') {
+                await updateUser(phone, { step: 'idle' });
+                await processMessageLogic(phone, "hola", user.client_name || senderName);
+                return;
+            }
+
+            await sendMetaMessage(phone, "🔍 Analizando tu consulta con nuestro asistente de IA y buscando refacciones compatibles en la web... Esto puede tardar hasta un minuto. Por favor, espera.");
+
+            try {
+                const pythonOutput = await runVinSearch(text);
+                let responseData;
+                try {
+                    const trimmed = pythonOutput.trim();
+                    const jsonStartIndex = trimmed.indexOf('{');
+                    const jsonEndIndex = trimmed.lastIndexOf('}');
+                    if (jsonStartIndex === -1 || jsonEndIndex === -1) {
+                        throw new Error("No JSON block found in output");
+                    }
+                    const jsonStr = trimmed.substring(jsonStartIndex, jsonEndIndex + 1);
+                    responseData = JSON.parse(jsonStr);
+                } catch (parseErr) {
+                    console.error("Error parsing python JSON:", parseErr);
+                    throw new Error("No pudimos analizar la respuesta de la IA.");
+                }
+
+                if (!responseData || !responseData.success) {
+                    throw new Error(responseData?.error || "Error en el agente de IA.");
+                }
+
+                // 1. Mostrar respuesta conversacional en español al cliente
+                const clientResponse = responseData.respuesta_cliente || "Hemos analizado tu consulta.";
+                await sendMetaMessage(phone, clientResponse);
+                sendMetaVoiceNote(phone, cleanTextForTTS(clientResponse)).catch(e => console.error("TTS error:", e));
+
+                // 2. Buscar en Supabase
+                const candidates = responseData.numeros_parte || [];
+                const state = user.current_state;
+                
+                let results = [];
+                for (const partNum of candidates) {
+                    if (!partNum) continue;
+                    const partsFound = await searchParts(partNum, state);
+                    if (partsFound && partsFound.length > 0) {
+                        results.push(...partsFound);
+                    }
+                }
+
+                // Eliminar duplicados si los hubiera
+                const seenParts = new Set();
+                results = results.filter(r => {
+                    if (seenParts.has(r.part.part_number)) return false;
+                    seenParts.add(r.part.part_number);
+                    return true;
+                });
+
+                if (results.length === 0) {
+                    // Hacer búsqueda global (nacional) en sucursales foráneas
+                    let globalResults = [];
+                    for (const partNum of candidates) {
+                        if (!partNum) continue;
+                        const partsFound = await searchParts(partNum, null);
+                        if (partsFound && partsFound.length > 0) {
+                            globalResults.push(...partsFound);
+                        }
+                    }
+
+                    // Filtrar duplicados globales
+                    const seenGlobal = new Set();
+                    globalResults = globalResults.filter(r => {
+                        if (seenGlobal.has(r.part.part_number)) return false;
+                        seenGlobal.add(r.part.part_number);
+                        return true;
+                    });
+
+                    if (globalResults.length > 0) {
+                        userSearchSessions[phone] = { type: 'foreign_pending', query: text, results: globalResults };
+                        await updateUser(phone, { step: 'asking_foreign' });
+
+                        const msg = `💡 No encontramos existencias de estas refacciones en sucursales de *${state}*.\n\nSin embargo, detectamos que *sí están disponibles* en sucursales foráneas de otros estados.\n\n¿Deseas que te mostremos las opciones disponibles de otros estados para solicitarla de allá?`;
+
+                        await sendMetaMessage(phone, null, 'interactive', {
+                            type: "button",
+                            body: { text: msg },
+                            action: {
+                                buttons: [
+                                    { type: "reply", reply: { id: "VER_FORANEAS", title: "SÍ, Ver Foráneas" } },
+                                    { type: "reply", reply: { id: "BUSCAR_OTRA", title: "NO, Buscar Otra" } }
+                                ]
+                            }
+                        });
+                        return;
+                    }
+
+                    // No stock at all
+                    await updateUser(phone, { step: 'help_no_stock_options' });
+                    const noStockMsg = `⚠️ Informamos que, por el momento, no se encontraron resultados en existencia en ninguna de nuestras sucursales para los números de parte sugeridos.\n\n¿Qué deseas hacer ahora?\n\n👉 Escribe *[O]* para buscar otra refacción.\n👉 Escribe *[V]* para vaciar carrito y reiniciar.\n👉 Escribe *[R]* para regresar al menú principal.`;
+                    await sendMetaMessage(phone, noStockMsg);
+                    sendMetaVoiceNote(phone, cleanTextForTTS(noStockMsg)).catch(e => console.error("TTS error:", e));
+                } else {
+                    // Encontró stock localmente! Presentar opciones al cliente
+                    const cart = userCarts[phone] || [];
+                    let validItemsFound = 0;
+                    let optionsData = {};
+                    let optionCounter = 1;
+                    let sections = [{ title: "Resultados Compatibles", rows: [] }];
+                    let textBody = `✅ *Refacciones compatibles encontradas en existencia (${state}):*\n\n`;
+
+                    results.forEach((item) => {
+                        let branchesWithStock = [];
+                        item.inventory.forEach(inv => {
+                            let cartQuantity = 0;
+                            for (const cartItem of cart) {
+                                if (cartItem.part.part_number === item.part.part_number && cartItem.branch.branch_id === inv.branch_id) {
+                                    cartQuantity += cartItem.quantity;
+                                }
+                            }
+                            const actualStock = inv.stock - cartQuantity;
+                            if (actualStock > 0) branchesWithStock.push({ ...inv, stock: actualStock });
+                        });
+
+                        if (branchesWithStock.length > 0) {
+                            validItemsFound++;
+                            textBody += `📦 *${item.part.part_number}* - ${item.part.description} ($${item.part.price})\n`;
+                            branchesWithStock.forEach(inv => {
+                                const maxBranches = cart.length > 0 ? 7 : 8;
+                                if (optionCounter <= maxBranches) {
+                                    optionsData[optionCounter] = { part: item.part, branch: inv };
+                                    textBody += `   👉 *[${optionCounter}]* ${inv.branch_name} (Stock: ${inv.stock})\n`;
+                                    sections[0].rows.push({
+                                        id: optionCounter.toString(),
+                                        title: `[${optionCounter}] ${inv.branch_name}`.substring(0, 24).trim(),
+                                        description: `Stock: ${inv.stock} | ${item.part.description} ($${item.part.price})`.substring(0, 72)
+                                    });
+                                    optionCounter++;
+                                }
+                            });
+                            textBody += `\n`;
+                        }
+                    });
+
+                    if (validItemsFound === 0) {
+                        await updateUser(phone, { step: 'help_no_stock_options' });
+                        const alertMsg = `⚠️ Las refacciones sugeridas existen en ${state}, pero el inventario ya lo tienes reservado en tu carrito.\n\n👉 Escribe *[O]* para buscar otra refacción.\n👉 Escribe *[V]* para vaciar carrito y reiniciar.\n👉 Escribe *[R]* para regresar al menú principal.`;
+                        await sendMetaMessage(phone, alertMsg);
+                    } else {
+                        sections[0].rows.push({ id: "O", title: "[O] Buscar otra pieza", description: "Buscar una refacción diferente" });
+                        if (cart.length > 0) sections[0].rows.push({ id: "F", title: "[F] Finalizar pedido", description: "Confirmar y procesar tu pedido actual" });
+                        sections[0].rows.push({ id: "V", title: "[V] Vaciar y reiniciar", description: "Borrar el carrito y comenzar de nuevo" });
+                        sections[0].rows.push({ id: "R", title: "[R] Regresar al inicio", description: "Volver al menú de bienvenida" });
+
+                        userSearchSessions[phone] = optionsData;
+                        await updateUser(phone, { step: 'choosing_branch' });
+
+                        if (sections[0].rows.length > 10) {
+                            sections[0].rows = sections[0].rows.slice(0, 10);
+                        }
+
+                        let optionsText = `------------------\n`;
+                        optionsText += `👉 *[O]* Buscar otra pieza\n`;
+                        if (cart.length > 0) {
+                            optionsText += `👉 *[F]* Finalizar pedido\n`;
+                        }
+                        optionsText += `👉 *[V]* Vaciar y reiniciar\n`;
+                        optionsText += `👉 *[R]* Regresar al inicio\n\n`;
+
+                        await sendMetaMessage(phone, null, 'interactive', {
+                            type: "list",
+                            header: { type: "text", text: `🔎 Refacciones Disponibles` },
+                            body: { text: textBody + optionsText + "Selecciona de la lista táctil o escribe el número o letra correspondiente para proceder con tu compra:" },
+                            footer: { text: "Selecciona una sucursal para agregar" },
+                            action: { button: "Ver Opciones", sections: sections }
+                        });
+                        sendMetaVoiceNote(phone, `Hemos encontrado refacciones compatibles en tu estado. Por favor presiona el botón Ver Opciones en pantalla para elegir la sucursal.`).catch(e => console.error("TTS error:", e));
+                    }
+                }
+            } catch (err) {
+                console.error("Error en flujo de ayuda de VIN:", err);
+                await sendMetaMessage(phone, `❌ Ocurrió un error inesperado al buscar la refacción por VIN: ${err.message}.\n\nPor favor, intenta de nuevo escribiendo tu consulta, o escribe **AYUDA** para reiniciar las instrucciones.`);
+            }
+        }
+        else if (step === 'help_no_stock_options') {
+            const spokenIntent = parseSpokenIntent(text);
+            const normalizedText = spokenIntent || text.toUpperCase().trim();
+
+            if (normalizedText === 'OTRA' || normalizedText === 'O') {
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "Dime qué *otra refacción* deseas buscar:");
+                return;
+            }
+            if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
+                delete userCarts[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
+                return;
+            }
+            if (normalizedText === 'REGRESAR' || normalizedText === 'R') {
+                await updateUser(phone, { step: 'idle' });
+                await processMessageLogic(phone, "hola", user.client_name || senderName);
+                return;
+            }
+            await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Escribe:\n- *[O]* para buscar otra refacción.\n- *[V]* para vaciar carrito y reiniciar.\n- *[R]* para regresar al menú principal.");
+        }
         else if (step === 'asking_foreign') {
             const spokenIntent = parseSpokenIntent(text);
             const normalizedText = spokenIntent || text.toUpperCase().trim();
@@ -1205,6 +1457,12 @@ async function processMessageLogic(phone, text, senderName) {
                 delete userCarts[phone];
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
+                return;
+            }
+            if (normalizedText === 'REGRESAR' || normalizedText === 'R') {
+                delete userSearchSessions[phone];
+                await updateUser(phone, { step: 'idle' });
+                await processMessageLogic(phone, "hola", user.client_name || senderName);
                 return;
             }
 
