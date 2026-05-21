@@ -435,10 +435,14 @@ let availableStatesCache = [];
 async function refreshAvailableStates() {
     try {
         const states = await getAvailableStates();
-        availableStatesCache = states.map(s => ({
-            original: s,
-            normalized: normalizeString(s)
-        }));
+        if (states && states.length > 0) {
+            // Sort states alphabetically for consistent and complete display
+            states.sort((a, b) => a.localeCompare(b));
+            availableStatesCache = states.map(s => ({
+                original: s,
+                normalized: normalizeString(s)
+            }));
+        }
     } catch (e) {
         console.error("Error refrescando estados:", e);
     }
@@ -748,6 +752,9 @@ async function sendMetaVoiceNote(phone, text) {
 
 async function sendStateOptionsList(phone, user, customText = null) {
     if (availableStatesCache.length === 0) {
+        await refreshAvailableStates();
+    }
+    if (availableStatesCache.length === 0) {
         await sendMetaMessage(phone, "⚠️ Lo siento, no hay estados disponibles registrados en el sistema en este momento.");
         return;
     }
@@ -858,6 +865,11 @@ app.post('/webhook', async (req, res) => {
 
 async function processMessageLogic(phone, text, senderName) {
     console.log(`\n📩 [MENSAJE RECIBIDO] De: ${phone} | Texto: "${text}"`);
+    
+    // Ensure states cache is populated
+    if (availableStatesCache.length === 0) {
+        await refreshAvailableStates();
+    }
     
     const user = await getUser(phone);
     if (!user) {
