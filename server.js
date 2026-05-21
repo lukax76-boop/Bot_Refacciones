@@ -411,6 +411,7 @@ const userSearchSessions = {};
 const userCarts = {};
 const userPendingItems = {};
 const userLastActive = {}; 
+const userVins = {};
 
 const ladaMap = {
     '33': 'Jalisco', '81': 'Nuevo León', '55': 'Ciudad de México', '56': 'Ciudad de México',
@@ -900,6 +901,7 @@ async function processMessageLogic(phone, text, senderName) {
         delete userCarts[phone];
         delete userPendingItems[phone];
         delete userSearchSessions[phone];
+        delete userVins[phone];
     }
     userLastActive[phone] = now;
     
@@ -915,6 +917,7 @@ async function processMessageLogic(phone, text, senderName) {
         delete userCarts[phone];
         delete userPendingItems[phone];
         delete userSearchSessions[phone];
+        delete userVins[phone];
     }
 
     if (text.toUpperCase() === 'SUCURSALES' || text.toUpperCase() === 'DIRECCION' || text.toUpperCase() === 'DIRECCIÓN' || text.toUpperCase() === 'CONTACTO') {
@@ -934,9 +937,16 @@ async function processMessageLogic(phone, text, senderName) {
         delete userSearchSessions[phone];
         delete userPendingItems[phone];
         
-        const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN o número de serie de 17 caracteres** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000")*`;
-        await sendMetaMessage(phone, explanation);
-        sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+        const savedVin = userVins[phone];
+        if (savedVin) {
+            const explanation = `Veo que ya registramos el **Identificador (VIN/Serie de Motor): \`${savedVin}\`** en tu sesión. 🚗\n\nSolo escribe la **pieza** que buscas (ej. "filtro de aceite") y la buscaremos para ese mismo vehículo.\n\nSi deseas buscar para un vehículo diferente, ingresa el nuevo **VIN o Serie de Motor** y la pieza.`;
+            await sendMetaMessage(phone, explanation);
+            sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+        } else {
+            const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN (17 caracteres)** o el **Número de Serie de Motor** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000" o "anillos para motor 2WS12345")*`;
+            await sendMetaMessage(phone, explanation);
+            sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+        }
         return;
     }
 
@@ -991,6 +1001,7 @@ async function processMessageLogic(phone, text, senderName) {
             if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
                 delete userSearchSessions[phone];
                 delete userCarts[phone];
+                delete userVins[phone];
                 const msg = "🔄 *Conversación reiniciada*. Dime qué refacción buscas:";
                 await sendMetaMessage(phone, msg);
                 sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
@@ -1143,6 +1154,7 @@ async function processMessageLogic(phone, text, senderName) {
             if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
                 delete userSearchSessions[phone];
                 delete userCarts[phone];
+                delete userVins[phone];
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
                 return;
@@ -1155,8 +1167,18 @@ async function processMessageLogic(phone, text, senderName) {
 
             await sendMetaMessage(phone, "🔍 Analizando tu consulta con nuestro asistente de IA y buscando refacciones compatibles en la web... Esto puede tardar hasta un minuto. Por favor, espera.");
 
+            // Detectar si el texto entrante ya contiene un VIN o número de serie de motor
+            const normalizedInput = text.replace(/[-\s]/g, '').toUpperCase();
+            const hasVin = /[A-Z0-9]{8,17}/.test(normalizedInput);
+            
+            let finalQuery = text;
+            if (!hasVin && userVins[phone]) {
+                finalQuery = `${text} para el VIN/Motor ${userVins[phone]}`;
+                console.log(`[AYUDA] Reutilizando VIN/Motor en caché (${userVins[phone]}) para consulta: "${text}"`);
+            }
+
             try {
-                const pythonOutput = await runVinSearch(text);
+                const pythonOutput = await runVinSearch(finalQuery);
                 let responseData;
                 try {
                     const trimmed = pythonOutput.trim();
@@ -1174,6 +1196,11 @@ async function processMessageLogic(phone, text, senderName) {
 
                 if (!responseData || !responseData.success) {
                     throw new Error(responseData?.error || "Error en el agente de IA.");
+                }
+
+                if (responseData && responseData.vin) {
+                    userVins[phone] = responseData.vin.trim().toUpperCase();
+                    console.log(`[AYUDA] VIN/Motor guardado en memoria para ${phone}: ${userVins[phone]}`);
                 }
 
                 // 1. Mostrar respuesta conversacional en español al cliente
@@ -1324,7 +1351,16 @@ async function processMessageLogic(phone, text, senderName) {
                 }
             } catch (err) {
                 console.error("Error en flujo de ayuda de VIN:", err);
-                await sendMetaMessage(phone, `❌ Ocurrió un error inesperado al buscar la refacción por VIN: ${err.message}.\n\nPor favor, intenta de nuevo escribiendo tu consulta, o escribe **AYUDA** para reiniciar las instrucciones.`);
+                
+                const isQuotaError = err.message.includes('429') || err.message.toUpperCase().includes('RESOURCE_EXHAUSTED') || err.message.toUpperCase().includes('QUOTA');
+                if (isQuotaError) {
+                    console.error("❌ [API KEY EXHAUSTED] La API Key de Gemini ha agotado su cuota diaria (429 Resource Exhausted). Por favor, configure una GEMINI_API_KEY de pago o con mayor cuota en el archivo .env.");
+                    const quotaUserMsg = `⚠️ Nuestro asistente de IA está experimentando una alta demanda en este momento y ha agotado su cuota diaria.\n\nPor favor, intenta de nuevo más tarde, o escribe **REINICIAR** para buscar directamente ingresando el número de parte o seleccionando tu estado sin usar el asistente de IA.`;
+                    await sendMetaMessage(phone, quotaUserMsg);
+                    sendMetaVoiceNote(phone, cleanTextForTTS(quotaUserMsg)).catch(e => console.error("TTS error:", e));
+                } else {
+                    await sendMetaMessage(phone, `❌ Ocurrió un error inesperado al buscar la refacción por VIN: ${err.message}.\n\nPor favor, intenta de nuevo escribiendo tu consulta, o escribe **AYUDA** para reiniciar las instrucciones.`);
+                }
             }
         }
         else if (step === 'help_no_stock_options') {
@@ -1611,6 +1647,7 @@ async function processMessageLogic(phone, text, senderName) {
                 }
             } else if (res === 'CANCELAR' || res === 'V') {
                 delete userCarts[phone];
+                delete userVins[phone];
                 await updateUser(phone, { step: 'asking_part' });
                 const msg = "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción buscas ahora:";
                 await sendMetaMessage(phone, msg);
@@ -1687,4 +1724,5 @@ async function processOrder(phone, clientName, clientNumber, currentState) {
 
     await updateUser(phone, { step: 'idle' });
     delete userCarts[phone];
+    delete userVins[phone];
 }

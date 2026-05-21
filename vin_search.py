@@ -45,13 +45,13 @@ def agente_interpretar_consulta(client, mensaje_cliente):
     "{mensaje_cliente}"
     
     Debes extraer de forma precisa:
-    1. El VIN o número de serie de 17 caracteres (búscalo, descarta espacios/guiones y límpialo).
+    1. El VIN, número de serie de chasis o número de serie del motor (búscalo de 6 a 17 caracteres, descarta espacios/guiones y límpialo, guárdalo bajo la clave "vin").
     2. El nombre técnico de la refacción traducido estrictamente al INGLÉS (ej: si pide balatas es 'brake pads', si pide foco de reversa es 'back up light bulb', si pide anillos es 'piston rings', si pide llantas es 'tires').
-    3. Clasifica si el vehículo es un Tráiler/Camión Pesado (True) o un Auto Convencional/Camioneta (False) analizando el VIN o el contexto de la frase.
+    3. Clasifica si el vehículo es un Tráiler/Camión Pesado (True) o un Auto Convencional/Camioneta (False) analizando el VIN, la serie de motor o el contexto de la frase.
     
     Responde ÚNICAMENTE con un formato JSON estructurado como este, sin texto adicional ni bloques de código markdown:
     {{
-        "vin": "EL_VIN_DE_17_CARACTERES",
+        "vin": "EL_VIN_O_SERIE_DE_MOTOR",
         "pieza_en_ingles": "technical_term_in_english",
         "es_trailer": true/false
     }}
