@@ -1381,11 +1381,16 @@ async function processMessageLogic(phone, text, senderName) {
                 // 2. Buscar en Supabase con logs detallados en tiempo real
                 let candidates = [];
                 if (responseData.numeros_parte) {
+                    let rawCandidates = [];
                     if (Array.isArray(responseData.numeros_parte)) {
-                        candidates = responseData.numeros_parte.map(c => String(c).trim()).filter(Boolean);
+                        rawCandidates = responseData.numeros_parte.map(c => String(c).trim()).filter(Boolean);
                     } else {
-                        candidates = [String(responseData.numeros_parte).trim()].filter(Boolean);
+                        rawCandidates = [String(responseData.numeros_parte).trim()].filter(Boolean);
                     }
+                    // Limpieza ultra-robusta de candidatos (quitar comillas, puntos, comas, espacios sobrantes)
+                    candidates = rawCandidates.map(c => {
+                        return c.replace(/^["'\s.,:]+|["'\s.,:]+$/g, '').trim();
+                    }).filter(Boolean);
                 }
 
                 const state = user.current_state;
@@ -1740,9 +1745,15 @@ async function processMessageLogic(phone, text, senderName) {
             
             const validSelections = [];
             if (sessionData) {
+                const seenInBatch = new Set();
                 for (const idx of selectedIndices) {
                     if (sessionData[idx]) {
-                        validSelections.push(sessionData[idx]);
+                        const item = sessionData[idx];
+                        const key = `${item.part.part_number}_${item.branch.branch_id}`;
+                        if (!seenInBatch.has(key)) {
+                            seenInBatch.add(key);
+                            validSelections.push(item);
+                        }
                     }
                 }
             }
@@ -1865,7 +1876,17 @@ async function processMessageLogic(phone, text, senderName) {
             }
 
             if (!userCarts[phone]) userCarts[phone] = [];
-            userCarts[phone].push({ ...pendingItem, quantity });
+            
+            const existingIndex = userCarts[phone].findIndex(cartItem => 
+                cartItem.part.part_number === pendingItem.part.part_number && 
+                cartItem.branch.branch_id === pendingItem.branch.branch_id
+            );
+            
+            if (existingIndex !== -1) {
+                userCarts[phone][existingIndex].quantity += quantity;
+            } else {
+                userCarts[phone].push({ ...pendingItem, quantity });
+            }
             
             // Remove the processed item
             pendingQueue.shift();

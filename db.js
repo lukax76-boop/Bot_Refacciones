@@ -77,19 +77,60 @@ async function updateUser(phoneNumber, updates) {
 async function searchParts(queryText, state) {
     if (!supabase) return [];
     
-    // Buscar la refacción (por numero exacto o descripción LIKE)
-    // Para simplificar, buscamos en partes y hacemos un JOIN manual o con PostgREST
-    // Haremos la consulta directamente a la vista combinada si estuviera, 
-    // pero aquí lo haremos con múltiples queries para asegurar que funciona sin necesidad de vistas complejas en Supabase.
+    // Buscar la refacción (por número exacto o descripción LIKE)
+    // Para simplificar, buscamos en partes y hacemos un JOIN manual o con PostgREST.
     
     let queryTrimmed = queryText.trim();
     
-    // 1. Búsqueda exacta inicial
+    // Escapar comas para evitar que PostgREST or() falle con sintaxis inválida
+    const safeQuery = queryTrimmed.replace(/,/g, '');
+    const cleanQuery = safeQuery.replace(/[^A-Z0-9]/ig, '');
+    let wildcardQuery = '';
+    if (cleanQuery.length > 1) {
+        const chunks = cleanQuery.split(/([A-Z]+|[0-9]+)/i).filter(Boolean);
+        wildcardQuery = chunks.join('%');
+    }
+
+    let orConditions = `part_number.ilike.%${safeQuery}%,description.ilike.%${safeQuery}%`;
+    if (cleanQuery && cleanQuery !== safeQuery) {
+        orConditions += `,part_number.ilike.%${cleanQuery}%`;
+    }
+    if (wildcardQuery && wildcardQuery !== safeQuery && wildcardQuery !== cleanQuery) {
+        orConditions += `,part_number.ilike.%${wildcardQuery}%`;
+    }
+    
+    // 1. Búsqueda exacta inicial con soporte de variaciones
     let { data: parts, error: err1 } = await supabase
         .from('parts')
         .select('*')
-        .or(`part_number.ilike.%${queryTrimmed}%,description.ilike.%${queryTrimmed}%`)
-        .limit(5);
+        .or(orConditions)
+        .limit(10);
+
+    if (parts && parts.length > 0) {
+        // Ordenar los resultados para favorecer la coincidencia exacta
+        const qNorm = cleanQuery.toLowerCase();
+        parts.sort((a, b) => {
+            const aNumNorm = (a.part_number || '').replace(/[^A-Z0-9]/ig, '').toLowerCase();
+            const bNumNorm = (b.part_number || '').replace(/[^A-Z0-9]/ig, '').toLowerCase();
+            
+            // Coincidencia exacta del número de parte normalizado tiene máxima prioridad
+            const aExact = aNumNorm === qNorm;
+            const bExact = bNumNorm === qNorm;
+            if (aExact && !bExact) return -1;
+            if (!aExact && bExact) return 1;
+            
+            // Coincidencia exacta del part_number original (incluyendo guiones)
+            const aOrigExact = a.part_number?.toLowerCase() === queryTrimmed.toLowerCase();
+            const bOrigExact = b.part_number?.toLowerCase() === queryTrimmed.toLowerCase();
+            if (aOrigExact && !bOrigExact) return -1;
+            if (!aOrigExact && bOrigExact) return 1;
+            
+            return 0;
+        });
+        
+        // Limitar a los 5 mejores resultados
+        parts = parts.slice(0, 5);
+    }
 
     // 2. Búsqueda inteligente (Fuzzy Search) si no hay resultados exactos
     if ((err1 || !parts || parts.length === 0) && queryTrimmed.includes(' ')) {
