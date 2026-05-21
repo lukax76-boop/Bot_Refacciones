@@ -544,6 +544,31 @@ function getValidState(input) {
     return found ? found.original : null;
 }
 
+// ==========================================
+// FUNCIÓN: DETECTAR VIN O NÚMERO DE MOTOR
+// ==========================================
+function extractVINAndPart(text) {
+    // Detectar VIN (17 caracteres alfanuméricos, sin espacios ni guiones)
+    const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/i);
+    const vin = vinMatch ? vinMatch[0].toUpperCase() : null;
+    
+    // Detectar número de motor (5-10 dígitos consecutivos o patron común)
+    const motorMatch = text.match(/(?:motor|motor:\s*|motor #\s*)([0-9A-Z]{5,10})/i) || 
+                       text.match(/\b[0-9]{5,10}\b/);
+    const motor = motorMatch ? motorMatch[motorMatch.length - 1] : null;
+    
+    // Extraer la pieza buscada (remover VIN/Motor del texto)
+    let partText = text;
+    if (vin) partText = partText.replace(vin, '').trim();
+    if (motor) partText = partText.replace(motor, '').trim();
+    
+    return {
+        vin,
+        motor,
+        partDescription: partText.length > 0 ? partText : null
+    };
+}
+
 // Helper: Enviar mensaje mediante Meta Cloud API
 async function sendMetaMessage(phone, content, type = 'text', interactiveOptions = null) {
     const token = process.env.META_ACCESS_TOKEN;
@@ -932,20 +957,26 @@ async function processMessageLogic(phone, text, senderName) {
         return;
     }
 
-    if (text.toUpperCase().trim() === 'AYUDA') {
-        await updateUser(phone, { step: 'asking_help_details' });
-        delete userSearchSessions[phone];
-        delete userPendingItems[phone];
-        
-        const savedVin = userVins[phone];
-        if (savedVin) {
-            const explanation = `Veo que ya registramos el **Identificador (VIN/Serie de Motor): \`${savedVin}\`** en tu sesión. 🚗\n\nSolo escribe la **pieza** que buscas (ej. "filtro de aceite") y la buscaremos para ese mismo vehículo.\n\nSi deseas buscar para un vehículo diferente, ingresa el nuevo **VIN o Serie de Motor** y la pieza.`;
-            await sendMetaMessage(phone, explanation);
-            sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+    if (lowerText.includes('ayuda') || lowerText.includes('help') || lowerText === '?' || lowerText === 'ayuda') {
+        if (text.toUpperCase().trim() === 'AYUDA') {
+            await updateUser(phone, { step: 'asking_help_details' });
+            delete userSearchSessions[phone];
+            delete userPendingItems[phone];
+            
+            const savedVin = userVins[phone];
+            if (savedVin) {
+                const explanation = `Veo que ya registramos el **Identificador (VIN/Serie de Motor): \`${savedVin}\`** en tu sesión. 🚗\n\nSolo escribe la **pieza** que buscas (ej. "filtro de aceite") y la buscaremos para ese mismo vehículo.\n\nSi deseas buscar para un vehículo diferente, ingresa el nuevo **VIN o Serie de Motor** y la pieza.`;
+                await sendMetaMessage(phone, explanation);
+                sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+            } else {
+                const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN (17 caracteres)** o el **Número de Serie de Motor** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000" o "anillos para motor 2WS12345")*`;
+                await sendMetaMessage(phone, explanation);
+                sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+            }
         } else {
-            const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN (17 caracteres)** o el **Número de Serie de Motor** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000" o "anillos para motor 2WS12345")*`;
-            await sendMetaMessage(phone, explanation);
-            sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
+            const helpMsg = `📞 *¡Bienvenido a nuestro Servicio de Ayuda!* 📞\n\n*¿Cómo te podemos ayudar?*\n\n1️⃣ *Buscar una Refacción:* Escribe el nombre de la pieza que necesitas (ej: "Filtro de aceite")\n\n2️⃣ *Cambiar de Estado:* Escribe *ESTADO* para cambiar tu zona de búsqueda\n\n3️⃣ *Ver Sucursales:* Escribe *SUCURSALES* para ver nuestro directorio completo\n\n4️⃣ *Mi Carrito:* Escribe *FINALIZAR* para completar tu pedido o *VACIAR* para limpiar el carrito\n\n5️⃣ *Contacto Directo:* Si tienes una pregunta específica, aquí estamos para ayudarte 🤝\n\n💡 *Consejo:* Puedes escribir en voz o texto. Nuestro sistema entiende audios, números de VIN y descripciones de piezas.\n\n¿En qué te podemos asistir hoy?`;
+            await sendMetaMessage(phone, helpMsg);
+            sendMetaVoiceNote(phone, `Bienvenido al servicio de ayuda. Puedes buscar una refacción, cambiar de estado, ver nuestras sucursales, o completar tu pedido. ¿En qué puedo ayudarte?`).catch(e => console.error("TTS error:", e));
         }
         return;
     }
@@ -1030,6 +1061,40 @@ async function processMessageLogic(phone, text, senderName) {
                     sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                     return;
                 }
+            }
+
+            // ✅ NUEVA LÓGICA: DETECTAR Y CONFIRMAR VIN O NÚMERO DE MOTOR
+            const vinData = extractVINAndPart(text);
+            if (vinData.vin || vinData.motor) {
+                let vinConfirmMsg = "📌 *He detectado los siguientes datos:*\n\n";
+                
+                if (vinData.vin) {
+                    vinConfirmMsg += `🔑 *VIN:* \`${vinData.vin}\`\n`;
+                }
+                if (vinData.motor) {
+                    vinConfirmMsg += `⚙️ *Número de Motor:* \`${vinData.motor}\`\n`;
+                }
+                
+                if (vinData.partDescription) {
+                    vinConfirmMsg += `🔧 *Refacción buscada:* ${vinData.partDescription}\n`;
+                } else {
+                    vinConfirmMsg += `⚠️ *No detecté la refacción que buscas.*\n`;
+                }
+                
+                vinConfirmMsg += `\n¿Es correcto esta información? Responde SÍ para continuar o NO para corregir.`;
+                
+                // Guardar datos temporales
+                userPendingItems[phone] = {
+                    vin: vinData.vin,
+                    motor: vinData.motor,
+                    partText: vinData.partDescription || text,
+                    originalText: text
+                };
+                
+                await updateUser(phone, { step: 'confirming_vin' });
+                await sendMetaMessage(phone, vinConfirmMsg);
+                sendMetaVoiceNote(phone, vinConfirmMsg).catch(e => console.error("TTS error:", e));
+                return;
             }
 
             const state = user.current_state;
@@ -1538,6 +1603,33 @@ async function processMessageLogic(phone, text, senderName) {
             } else {
                 await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o escribe el número o letra correspondiente (ej. 1, O, V) para elegir.");
                 sendMetaVoiceNote(phone, "Opción inválida. Usa el botón de la lista en tu pantalla o menciona el número o letra de opción correspondiente.").catch(e => console.error("TTS error:", e));
+            }
+        }
+        // ✅ NUEVO STEP: CONFIRMAR VIN O MOTOR
+        else if (step === 'confirming_vin') {
+            const spokenIntent = parseSpokenIntent(text);
+            const normalizedText = spokenIntent || text.toUpperCase().trim();
+            const pendingData = userPendingItems[phone];
+            
+            if (!pendingData) {
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "⚠️ Sesión expirada. Por favor dime qué refacción buscas:");
+                return;
+            }
+            
+            if (normalizedText === 'SI' || normalizedText === 'SÍ') {
+                // Confirmado - proceder con búsqueda
+                await updateUser(phone, { step: 'asking_part' });
+                delete userPendingItems[phone];
+                const searchText = pendingData.partText || pendingData.originalText;
+                await sendMetaMessage(phone, `✅ VIN/Motor confirmado. Buscando *${searchText}* ahora...`);
+                await processMessageLogic(phone, searchText, '');
+            } else if (normalizedText === 'NO') {
+                await updateUser(phone, { step: 'asking_part' });
+                delete userPendingItems[phone];
+                await sendMetaMessage(phone, "👍 Entendido. Por favor envía nuevamente: VIN/Motor y la refacción (ej: *ABC1234567890DEFG Filtro de aceite*):");
+            } else {
+                await sendMetaMessage(phone, "⚠️ Responde SÍ si es correcto o NO para corregir.");
             }
         }
         else if (step === 'asking_quantity') {
