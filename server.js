@@ -491,6 +491,41 @@ function parseSpokenNumber(text) {
     return NaN;
 }
 
+function parseMultipleNumbers(text) {
+    if (!text) return [];
+    const clean = text.toLowerCase().trim();
+    
+    const wordToNumber = {
+        'cero': 0, 'uno': 1, 'una': 1, 'primer': 1, 'primero': 1, 'primera': 1,
+        'dos': 2, 'segundo': 2, 'segunda': 2,
+        'tres': 3, 'tercer': 3, 'tercero': 3, 'tercera': 3,
+        'cuatro': 4, 'cuarto': 4, 'cuarta': 4,
+        'cinco': 5, 'quinto': 5, 'quinta': 5,
+        'seis': 6, 'sexto': 6, 'sexta': 6,
+        'siete': 7, 'septimo': 7, 'séptimo': 7, 'septima': 7, 'séptima': 7,
+        'ocho': 8, 'octavo': 8, 'octava': 8,
+        'nueve': 9, 'noveno': 9, 'novena': 9,
+        'diez': 10, 'decimo': 10, 'décimo': 10, 'decima': 10, 'décima': 10
+    };
+
+    // Primero, busquemos todos los grupos de dígitos en el texto
+    const digitMatches = clean.match(/\d+/g);
+    if (digitMatches && digitMatches.length > 0) {
+        return Array.from(new Set(digitMatches.map(num => parseInt(num))));
+    }
+    
+    // Si no hay dígitos literales, dividimos por espacios, comas o "y"
+    const tokens = clean.split(/[\s,y]+/).filter(t => t.length > 0);
+    const results = [];
+    for (const token of tokens) {
+        const cleanWord = token.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+        if (wordToNumber[cleanWord] !== undefined) {
+            results.push(wordToNumber[cleanWord]);
+        }
+    }
+    return Array.from(new Set(results));
+}
+
 function parseSpokenIntent(text) {
     if (!text) return null;
     const clean = text.toLowerCase().trim();
@@ -1250,9 +1285,6 @@ async function processMessageLogic(phone, text, senderName) {
                     if (cart.length > 0) sections[0].rows.push({ id: "F", title: "[F] Finalizar pedido", description: "Confirmar y procesar tu pedido actual" });
                     sections[0].rows.push({ id: "V", title: "[V] Vaciar y reiniciar", description: "Borrar el carrito y comenzar de nuevo" });
 
-                    userSearchSessions[phone] = optionsData;
-                    await updateUser(phone, { step: 'choosing_branch' });
-                    
                     // Asegurarse de no exceder el límite de 10 rows de WhatsApp
                     if(sections[0].rows.length > 10) {
                         sections[0].rows = sections[0].rows.slice(0, 10);
@@ -1265,13 +1297,22 @@ async function processMessageLogic(phone, text, senderName) {
                     }
                     optionsText += `👉 *[V]* Vaciar y reiniciar\n\n`;
                     
-                    await sendMetaMessage(phone, null, 'interactive', {
+                    const listBodyText = textBody + optionsText + "Selecciona de la lista táctil o escribe el número correspondiente para proceder con tu compra. ¡Puedes elegir varios números a la vez separados por comas o la letra 'y' (ej. 1, 3 o 1 y 2)!";
+                    const interactivePayload = {
                         type: "list",
                         header: { type: "text", text: `🔎 Resultados de búsqueda` },
-                        body: { text: textBody + optionsText + "Selecciona una opción de la lista táctil o escribe el número o letra correspondiente (ej. 1, O, V) para elegir:" },
+                        body: { text: listBodyText },
                         footer: { text: "Selecciona una sucursal" },
                         action: { button: "Ver Opciones", sections: sections }
-                    });
+                    };
+
+                    userSearchSessions[phone] = {
+                        optionsData: optionsData,
+                        interactivePayload: interactivePayload
+                    };
+                    await updateUser(phone, { step: 'choosing_branch' });
+                    
+                    await sendMetaMessage(phone, null, 'interactive', interactivePayload);
                     sendMetaVoiceNote(phone, `Hemos encontrado las siguientes opciones en sucursales de ${state}. Por favor presiona el botón Ver Opciones en pantalla para elegir tu sucursal.`).catch(e => console.error("TTS error:", e));
                 }
             }
@@ -1449,14 +1490,6 @@ async function processMessageLogic(phone, text, senderName) {
                         const alertMsg = `⚠️ Las refacciones sugeridas existen en ${state}, pero el inventario ya lo tienes reservado en tu carrito.\n\n👉 Escribe *[O]* para buscar otra refacción.\n👉 Escribe *[V]* para vaciar carrito y reiniciar.\n👉 Escribe *[R]* para regresar al menú principal.`;
                         await sendMetaMessage(phone, alertMsg);
                     } else {
-                        sections[0].rows.push({ id: "O", title: "[O] Buscar otra pieza", description: "Buscar una refacción diferente" });
-                        if (cart.length > 0) sections[0].rows.push({ id: "F", title: "[F] Finalizar pedido", description: "Confirmar y procesar tu pedido actual" });
-                        sections[0].rows.push({ id: "V", title: "[V] Vaciar y reiniciar", description: "Borrar el carrito y comenzar de nuevo" });
-                        sections[0].rows.push({ id: "R", title: "[R] Regresar al inicio", description: "Volver al menú de bienvenida" });
-
-                        userSearchSessions[phone] = optionsData;
-                        await updateUser(phone, { step: 'choosing_branch' });
-
                         if (sections[0].rows.length > 10) {
                             sections[0].rows = sections[0].rows.slice(0, 10);
                         }
@@ -1469,13 +1502,22 @@ async function processMessageLogic(phone, text, senderName) {
                         optionsText += `👉 *[V]* Vaciar y reiniciar\n`;
                         optionsText += `👉 *[R]* Regresar al inicio\n\n`;
 
-                        await sendMetaMessage(phone, null, 'interactive', {
+                        const listBodyText = textBody + optionsText + "Selecciona de la lista táctil o escribe el número correspondiente para proceder con tu compra. ¡Puedes elegir varios números a la vez separados por comas o la letra 'y' (ej. 1, 3 o 1 y 2)!";
+                        const interactivePayload = {
                             type: "list",
                             header: { type: "text", text: `🔎 Refacciones Disponibles` },
-                            body: { text: textBody + optionsText + "Selecciona de la lista táctil o escribe el número o letra correspondiente para proceder con tu compra:" },
+                            body: { text: listBodyText },
                             footer: { text: "Selecciona una sucursal para agregar" },
                             action: { button: "Ver Opciones", sections: sections }
-                        });
+                        };
+
+                        userSearchSessions[phone] = {
+                            optionsData: optionsData,
+                            interactivePayload: interactivePayload
+                        };
+                        await updateUser(phone, { step: 'choosing_branch' });
+
+                        await sendMetaMessage(phone, null, 'interactive', interactivePayload);
                         sendMetaVoiceNote(phone, `Hemos encontrado refacciones compatibles en tu estado. Por favor presiona el botón Ver Opciones en pantalla para elegir la sucursal.`).catch(e => console.error("TTS error:", e));
                     }
                 }
@@ -1587,34 +1629,35 @@ async function processMessageLogic(phone, text, senderName) {
                     await updateUser(phone, { step: 'asking_part' });
                     delete userSearchSessions[phone];
                 } else {
-                    sections[0].rows.push({ id: "O", title: "[O] Buscar otra pieza", description: "Buscar una refacción diferente" });
-                    if (cart.length > 0) sections[0].rows.push({ id: "F", title: "[F] Finalizar pedido", description: "Confirmar y procesar tu pedido actual" });
-                    sections[0].rows.push({ id: "V", title: "[V] Vaciar y reiniciar", description: "Borrar el carrito y comenzar de nuevo" });
+                        if (sections[0].rows.length > 10) {
+                            sections[0].rows = sections[0].rows.slice(0, 10);
+                        }
 
-                    userSearchSessions[phone] = optionsData;
-                    await updateUser(phone, { step: 'choosing_branch' });
+                        let optionsText = `------------------\n`;
+                        optionsText += `👉 *[O]* Buscar otra pieza\n`;
+                        if (cart.length > 0) {
+                            optionsText += `👉 *[F]* Finalizar pedido\n`;
+                        }
+                        optionsText += `👉 *[V]* Vaciar y reiniciar\n\n`;
 
-                    // Asegurarse de no exceder el límite de 10 rows de WhatsApp
-                    if (sections[0].rows.length > 10) {
-                        sections[0].rows = sections[0].rows.slice(0, 10);
+                        const listBodyText = textBody + optionsText + "Selecciona una sucursal foránea de la lista táctil o escribe el número correspondiente para proceder con tu compra. ¡Puedes elegir varios números a la vez separados por comas o la letra 'y' (ej. 1, 3 o 1 y 2)!";
+                        const interactivePayload = {
+                            type: "list",
+                            header: { type: "text", text: `🔎 Opciones Foráneas` },
+                            body: { text: listBodyText },
+                            footer: { text: "Selecciona una sucursal foránea" },
+                            action: { button: "Ver Opciones", sections: sections }
+                        };
+
+                        userSearchSessions[phone] = {
+                            optionsData: optionsData,
+                            interactivePayload: interactivePayload
+                        };
+                        await updateUser(phone, { step: 'choosing_branch' });
+
+                        await sendMetaMessage(phone, null, 'interactive', interactivePayload);
+                        sendMetaVoiceNote(phone, "Hemos encontrado las siguientes sucursales foráneas. Por favor presiona el botón Ver Opciones en tu pantalla para elegir.").catch(e => console.error("TTS error:", e));
                     }
-
-                    let optionsText = `------------------\n`;
-                    optionsText += `👉 *[O]* Buscar otra pieza\n`;
-                    if (cart.length > 0) {
-                        optionsText += `👉 *[F]* Finalizar pedido\n`;
-                    }
-                    optionsText += `👉 *[V]* Vaciar y reiniciar\n\n`;
-
-                    await sendMetaMessage(phone, null, 'interactive', {
-                        type: "list",
-                        header: { type: "text", text: `🔎 Opciones Foráneas` },
-                        body: { text: textBody + optionsText + "Selecciona una sucursal foránea de la lista táctil o escribe el número o letra correspondiente (ej. 1, O, V) para elegir:" },
-                        footer: { text: "Selecciona una sucursal foránea" },
-                        action: { button: "Ver Opciones", sections: sections }
-                    });
-                    sendMetaVoiceNote(phone, "Hemos encontrado las siguientes sucursales foráneas. Por favor presiona el botón Ver Opciones en tu pantalla para elegir.").catch(e => console.error("TTS error:", e));
-                }
             } else if (normalizedText === 'FINALIZAR' || normalizedText === 'CANCELAR' || normalizedText === 'NO' || normalizedText === 'BUSCAR_OTRA' || normalizedText === 'O') {
                 delete userSearchSessions[phone];
                 await updateUser(phone, { step: 'asking_part' });
@@ -1663,15 +1706,25 @@ async function processMessageLogic(phone, text, senderName) {
                 return;
             }
 
-            const optionIndex = parseSpokenNumber(text);
-            const sessionData = userSearchSessions[phone];
+            const selectedIndices = parseMultipleNumbers(text);
+            const session = userSearchSessions[phone];
+            const sessionData = session && session.optionsData ? session.optionsData : session;
             
-            if (sessionData && sessionData[optionIndex]) {
-                const selection = sessionData[optionIndex];
-                userPendingItems[phone] = { part: selection.part, branch: selection.branch };
+            const validSelections = [];
+            if (sessionData) {
+                for (const idx of selectedIndices) {
+                    if (sessionData[idx]) {
+                        validSelections.push(sessionData[idx]);
+                    }
+                }
+            }
+            
+            if (validSelections.length > 0) {
+                userPendingItems[phone] = validSelections; // Save as array
+                const firstSelection = validSelections[0];
                 await updateUser(phone, { step: 'asking_quantity' });
-                await sendMetaMessage(phone, "¿Cuántas piezas necesitas? (Ingresa solo el número)");
-                sendMetaVoiceNote(phone, `¿Cuántas piezas necesitas de ${selection.part.description}? Por favor responde escribiendo solo el número.`).catch(e => console.error("TTS error:", e));
+                await sendMetaMessage(phone, `¿Cuántas piezas necesitas de *${firstSelection.part.description}* (Sucursal: ${firstSelection.branch.branch_name})? (Ingresa solo el número)`);
+                sendMetaVoiceNote(phone, `¿Cuántas piezas necesitas de ${firstSelection.part.description}? Por favor responde escribiendo solo el número.`).catch(e => console.error("TTS error:", e));
             } else {
                 await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Usa el botón de la lista o escribe el número o letra correspondiente (ej. 1, O, V) para elegir.");
                 sendMetaVoiceNote(phone, "Opción inválida. Usa el botón de la lista en tu pantalla o menciona el número o letra de opción correspondiente.").catch(e => console.error("TTS error:", e));
@@ -1758,8 +1811,20 @@ async function processMessageLogic(phone, text, senderName) {
                 return;
             }
             
-            const pendingItem = userPendingItems[phone];
-            if (!pendingItem) {
+            let pendingQueue = userPendingItems[phone];
+            if (!pendingQueue) {
+                await sendMetaMessage(phone, "⚠️ Hubo un error recuperando tu pieza. Por favor, escribe 'Reiniciar'.");
+                return;
+            }
+
+            // Convert to array if it is a single item (for robustness/backwards compatibility)
+            if (!Array.isArray(pendingQueue)) {
+                pendingQueue = [pendingQueue];
+                userPendingItems[phone] = pendingQueue;
+            }
+
+            const pendingItem = pendingQueue[0];
+            if (!pendingItem || !pendingItem.branch) {
                 await sendMetaMessage(phone, "⚠️ Hubo un error recuperando tu pieza. Por favor, escribe 'Reiniciar'.");
                 return;
             }
@@ -1774,33 +1839,84 @@ async function processMessageLogic(phone, text, senderName) {
             if (!userCarts[phone]) userCarts[phone] = [];
             userCarts[phone].push({ ...pendingItem, quantity });
             
-            delete userPendingItems[phone];
-            delete userSearchSessions[phone];
+            // Remove the processed item
+            pendingQueue.shift();
             
+            if (pendingQueue.length > 0) {
+                // There are more items in the queue!
+                const nextSelection = pendingQueue[0];
+                await sendMetaMessage(phone, `✅ Agregado al carrito.\n\nAhora, ¿cuántas piezas necesitas de *${nextSelection.part.description}* (Sucursal: ${nextSelection.branch.branch_name})? (Ingresa solo el número)`);
+                sendMetaVoiceNote(phone, `Agregado al carrito. Ahora, ¿cuántas piezas necesitas de ${nextSelection.part.description}? Por favor responde escribiendo solo el número.`).catch(e => console.error("TTS error:", e));
+                return;
+            }
+            
+            // Queue finished! Clean up pending items
+            delete userPendingItems[phone];
+            
+            // Do NOT delete userSearchSessions[phone] to allow return to results!
             await updateUser(phone, { step: 'asking_more' });
             
-            // BOTONES INTERACTIVOS TOUCH
+            const hasSession = !!userSearchSessions[phone];
+            const buttons = [];
+            
+            if (hasSession) {
+                buttons.push({ type: "reply", reply: { id: "SEGUIR_COMPRANDO", title: "Regresar a Lista [S]" } });
+                buttons.push({ type: "reply", reply: { id: "O", title: "Buscar Otra [O]" } });
+                buttons.push({ type: "reply", reply: { id: "F", title: "Finalizar [F]" } });
+            } else {
+                buttons.push({ type: "reply", reply: { id: "O", title: "Buscar Otra [O]" } });
+                buttons.push({ type: "reply", reply: { id: "F", title: "Finalizar [F]" } });
+                buttons.push({ type: "reply", reply: { id: "V", title: "Vaciar Todo [V]" } });
+            }
+            
+            let msgText = `✅ ¡Pieza(s) agregada(s) a tu carrito! (Llevas ${userCarts[phone].length} artículo/s).\n\n¿Qué deseas hacer a continuación?`;
+            if (hasSession) {
+                msgText += `\n\n👉 *[S]* Regresar a los resultados de búsqueda previos.\n👉 *[O]* Buscar otra refacción diferente.\n👉 *[F]* Finalizar tu pedido.`;
+            } else {
+                msgText += `\n\n👉 *[O]* Buscar otra refacción.\n👉 *[F]* Finalizar tu pedido.\n👉 *[V]* Vaciar carrito y reiniciar.`;
+            }
+
             await sendMetaMessage(phone, null, 'interactive', {
                 type: "button",
-                body: { text: `✅ ¡Pieza agregada a tu carrito! (Llevas ${userCarts[phone].length} artículo/s).\n\n¿Deseas agregar otra refacción a tu pedido?` },
-                action: {
-                    buttons: [
-                        { type: "reply", reply: { id: "O", title: "Buscar Otra [O]" } },
-                        { type: "reply", reply: { id: "F", title: "Finalizar [F]" } },
-                        { type: "reply", reply: { id: "V", title: "Vaciar Todo [V]" } }
-                    ]
-                }
+                body: { text: msgText },
+                action: { buttons }
             });
-            sendMetaVoiceNote(phone, `¡Pieza agregada a tu carrito! Llevas ${userCarts[phone].length} artículo en tu pedido. ¿Deseas agregar otra refacción, finalizar el pedido o vaciar el carrito? Selecciona en tu pantalla o escribe O, F, V.`).catch(e => console.error("TTS error:", e));
+            
+            let voiceText = `¡Pieza agregada a tu carrito! Llevas ${userCarts[phone].length} artículos en tu pedido. `;
+            if (hasSession) {
+                voiceText += `¿Deseas regresar a la lista de resultados, buscar otra refacción o finalizar tu pedido?`;
+            } else {
+                voiceText += `¿Deseas buscar otra refacción, finalizar el pedido o vaciar el carrito?`;
+            }
+            sendMetaVoiceNote(phone, voiceText).catch(e => console.error("TTS error:", e));
         }
         else if (step === 'asking_more') {
             const spokenIntent = parseSpokenIntent(text);
-            const res = spokenIntent || text.toUpperCase().trim();
-            if (res === 'SI' || res === 'SÍ' || res === 'S' || res === 'O') {
+            const res = (spokenIntent || text.toUpperCase().trim()).replace(/[\[\]]/g, "");
+            const session = userSearchSessions[phone];
+            
+            // Check if they want to return to the search list
+            if (res === 'SEGUIR_COMPRANDO' || res === 'REGRESAR A LISTA S' || res === 'S' || res === 'REGRESAR' || res === 'LISTA') {
+                if (session && session.interactivePayload) {
+                    await updateUser(phone, { step: 'choosing_branch' });
+                    await sendMetaMessage(phone, null, 'interactive', session.interactivePayload);
+                    sendMetaVoiceNote(phone, `Regresando a los resultados de búsqueda. Por favor presiona Ver Opciones en pantalla para elegir otra sucursal o refacción.`).catch(e => console.error("TTS error:", e));
+                    return;
+                } else {
+                    // Fallback to searching a new part if no session exists
+                    await updateUser(phone, { step: 'asking_part' });
+                    await sendMetaMessage(phone, "⚠️ No se encontró una búsqueda previa activa. Dime qué *otra refacción* deseas buscar:");
+                    return;
+                }
+            }
+
+            if (res === 'SI' || res === 'SÍ' || res === 'O' || res === 'BUSCAR OTRA O' || res === 'BUSCAR_OTRA') {
+                delete userSearchSessions[phone]; // Clean up the session since they want a new search
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "Dime qué *otra refacción* buscas:");
                 sendMetaVoiceNote(phone, "Entendido. Dime qué otra refacción buscas:").catch(e => console.error("TTS error:", e));
-            } else if (res === 'NO' || res === 'N' || res === 'FINALIZAR' || res === 'F') {
+            } else if (res === 'NO' || res === 'N' || res === 'FINALIZAR' || res === 'F' || res === 'FINALIZAR F') {
+                delete userSearchSessions[phone]; // Clean up the session
                 if (user.client_name && user.client_number) {
                     await processOrder(phone, user.client_name, user.client_number, user.current_state);
                 } else {
@@ -1809,7 +1925,8 @@ async function processMessageLogic(phone, text, senderName) {
                     await sendMetaMessage(phone, msg);
                     sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 }
-            } else if (res === 'CANCELAR' || res === 'V') {
+            } else if (res === 'CANCELAR' || res === 'V' || res === 'VACIAR TODO V' || res === 'VACIAR') {
+                delete userSearchSessions[phone]; // Clean up the session
                 delete userCarts[phone];
                 delete userVins[phone];
                 await updateUser(phone, { step: 'asking_part' });
