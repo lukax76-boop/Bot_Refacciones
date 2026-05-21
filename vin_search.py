@@ -30,10 +30,31 @@ import json
 # =====================================================================
 # 2. CONFIGURACIÓN DE LA API DE GEMINI
 # =====================================================================
-# Intentamos obtener del entorno, si no existe o es placeholder usamos la provista por el usuario.
+def load_env():
+    # Busca el archivo .env en el directorio actual o superior y lo carga en os.environ
+    for path in [".env", "../.env"]:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            key, val = line.split("=", 1)
+                            key = key.strip()
+                            val = val.strip().strip('"').strip("'")
+                            if key not in os.environ:
+                                os.environ[key] = val
+                break
+            except Exception:
+                pass
+
+load_env()
+
+# Intentamos obtener la API key del entorno
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key or api_key.strip() == "" or api_key == "TU_API_KEY_AQUI":
-    api_key = "AIzaSyBvwRkkn7m_x5k9j9oVxJkNq7oWA2obD9o"
+    # Llave de respaldo en caso de emergencia, pero se prioriza la del archivo .env
+    api_key = "AIzaSyAHDL2H5kSx3Bbvx7iBf6CEqVcmjEEB2X8"
     os.environ["GEMINI_API_KEY"] = api_key
 
 # =====================================================================
@@ -45,9 +66,13 @@ def agente_interpretar_consulta(client, mensaje_cliente):
     "{mensaje_cliente}"
     
     Debes extraer de forma precisa:
-    1. El VIN, número de serie de chasis o número de serie del motor (búscalo de 6 a 17 caracteres, descarta espacios/guiones y límpialo, guárdalo bajo la clave "vin").
-    2. El nombre técnico de la refacción traducido estrictamente al INGLÉS (ej: si pide balatas es 'brake pads', si pide foco de reversa es 'back up light bulb', si pide anillos es 'piston rings', si pide llantas es 'tires').
-    3. Clasifica si el vehículo es un Tráiler/Camión Pesado (True) o un Auto Convencional/Camioneta (False) analizando el VIN, la serie de motor o el contexto de la frase.
+    1. El VIN, número de serie de chasis o número de serie del motor.
+       - Si es un vehículo ligero, busca el VIN estándar de 17 caracteres.
+       - Si es un motor pesado diésel (Caterpillar, Cummins, Detroit), busca números de serie o prefijos característicos de 6 a 17 caracteres (ej: 2WS12345, 6NZ04123, 1LW09999, 79123456, 06R0123456).
+       - Descartar espacios/guiones y límpialo, guárdalo bajo la clave "vin".
+    2. El nombre técnico de la refacción traducido estrictamente al INGLÉS (ej: si pide balatas es 'brake pads', si pide foco de reversa es 'back up light bulb', si pide anillos es 'piston rings', si pide llantas es 'tires', si pide filtro de aceite es 'oil filter').
+    3. Clasifica si el vehículo es un Tráiler/Camión Pesado/Motor Diésel Pesado (True) o un Auto Convencional/Camioneta (False).
+       - IMPORTANTE: Clasifica como TRUE si el mensaje menciona marcas de motores pesados (Caterpillar, Cummins, Detroit, Navistar, International), si el VIN/serie empieza con prefijos de motor conocidos (ej. 2WS, 6NZ, 1LW, 5EK, 9NZ, etc.), si tiene un formato de 8 números enteros consecutivos comunes en Cummins (ej. 79123456), o si el contexto general refiere a camiones, tractocamiones, maquinaria pesada o diésel.
     
     Responde ÚNICAMENTE con un formato JSON estructurado como este, sin texto adicional ni bloques de código markdown:
     {{
@@ -73,29 +98,35 @@ def agente_extraer_y_resolver(client, texto_pagina_web, pieza_ingles, mensaje_or
     su conocimiento de memoria para darle las opciones comerciales y especificaciones al cliente.
     """
     prompt = f"""
-    Estás actuando como el cerebro de un bot de WhatsApp para una refaccionaria en México.
+    Estás actuando como un catalogador experto en refacciones automotrices y equipo pesado diésel para un bot de WhatsApp en México.
     El cliente envió este mensaje: "{mensaje_original}"
-    Identificamos el VIN: `{vin}` y estamos buscando la pieza en inglés: '{pieza_ingles}'.
+    Identificamos el VIN/Motor: `{vin}` y estamos buscando la pieza en inglés: '{pieza_ingles}'.
     
     A continuación se te proporciona la masa de texto extraída de los buscadores en la nube.
     
     Texto de la web raspado:
     \"\"\"{texto_pagina_web[:15000]}\"\"\"
     
-    INSTRUCCIÓN DE BLINDAJE:
+    INSTRUCCIÓN DE BLINDAJE Y EXPERTISE AUTOMOTRIZ:
     1. Si el texto de la web contiene números de parte válidos para el vehículo, extraélos, límpialos de menús basura y muéstralos de forma profesional en ESPAÑOL.
-    2. CRÍTICO: Si el texto de la web NO contiene información útil (está vacío, o dice que no encontró resultados porque es un carro del mercado mexicano/chino como el Aveo LSG o Cavalier), tú debes usar tu propio conocimiento experto automotriz para resolver la duda del cliente de memoria.
+    2. CRÍTICO: Si el texto de la web NO contiene información útil (está vacío, o dice que no encontró resultados porque es un carro del mercado mexicano/chino como el Aveo LSG o Cavalier, o una serie de motor pesado Cummins/Caterpillar/Detroit), tú debes usar tu propio conocimiento experto automotriz profundo para deducir y sugerir de memoria los números de parte específicos más comunes del mercado OEM y Aftermarket.
     
-    Por ejemplo, si pide focos de reversa para ese Aveo, tú sabes de memoria que usa la entrada 1156 (BA15S / P21W) de un polo y patitas parejas, y debes recomendar las opciones comerciales (Hyperleds Canbus, Auxbeam LED, o halógeno convencional de 21W) y sus ventajas. Si pide anillos, da las medidas STD (1.0mm, 1.0mm, 2.0mm) y marcas.
+    Debes actuar como el cerebro experto definitivo:
+    - Para motores pesados diésel (por ejemplo Caterpillar 3406E o C15 con prefijos 2WS, 6NZ, 1LW, etc.):
+      * Si piden "anillos" (piston rings), debes conocer que los juegos de anillos más reconocidos en el mercado aftermarket son Interstate-McBee (referencias como "M-RS3406E2", "RSC15E2"), IPD o Caterpillar OEM ("1388506"). Debes incluirlos en "numeros_parte".
+      * Si piden cualquier otra pieza (filtros de aceite como "LF9009" para Cummins, o filtros de combustible, empaques, metales, etc.), debes deducir los números de parte de catálogo reales más exitosos (FP Diesel, Interstate-McBee, PAI, Baldwin, Donaldson).
+    - Para autos ligeros de mercado nacional (como Aveo, Cavalier, March, Versa, etc.):
+      * Si piden focos de reversa, tú sabes que usa la entrada 1156 (BA15S / P21W) y debes sugerir marcas/códigos comerciales.
+      * Si piden bujías, filtros, balatas, amortiguadores, etc., deduce los números de parte comunes o especificaciones exactas (como marcas Bosch, ACDelco, NGK con sus códigos de pieza alfanuméricos reales).
     
     Debes devolver un objeto JSON estructurado con exactamente estas dos claves:
-    1. "respuesta_cliente": Un mensaje en ESPAÑOL claro, profesional, pulcro y directo, orientado a mostrador de refaccionaria, listo para enviarse al cliente por WhatsApp (usa emojis amigables, viñetas si aplica, y negritas).
-    2. "numeros_parte": Una lista de strings con todos los códigos o números de parte sugeridos, encontrados o deducidos (ej: ["1156", "BA15S", "P21W"] o números de parte de fabricantes). Estos números se usarán para buscar en nuestra base de datos local de inventarios.
+    1. "respuesta_cliente": Un mensaje en ESPAÑOL sumamente claro, profesional, pulcro y directo, orientado a mostrador de refaccionaria, listo para enviarse al cliente por WhatsApp (usa emojis amigables, viñetas si aplica, y negritas). Explica detalladamente las compatibilidades, marcas, ventajas técnicas, y si hay variaciones (por ejemplo, si en Caterpillar los anillos dependen de si los pistones son articulados de dos piezas o de una sola pieza de acero).
+    2. "numeros_parte": Una lista de strings con todos los códigos o números de parte sugeridos, encontrados o deducidos de catálogos OEM o aftermarket relevantes (ej: ["1156", "BA15S", "P21W"] para focos, o ["M-RS3406E2", "RSC15E2", "1388506"] para anillos Caterpillar). Estos números se usarán para buscar directamente en nuestra base de datos local de inventarios. EVITA cadenas genéricas como "Anillos STD" o "Piston Rings"; coloca códigos alfanuméricos de parte de catálogo que puedan estar en inventario.
     
     Ejemplo de respuesta esperada:
     {{
-        "respuesta_cliente": "¡Hola! Para tu Chevrolet Aveo con el VIN proporcionado, la refacción que buscas (foco de reversa) utiliza la entrada de foco 1156 (también conocido como BA15S o P21W). Te sugerimos las siguientes opciones comerciales:\\n\\n- *Halógeno convencional (21W)*: Excelente durabilidad estándar.\\n- *HyperLEDs Canbus / Auxbeam LED*: Mayor iluminación y sin error en tablero.\\n\\nQuedamos a tus órdenes.",
-        "numeros_parte": ["1156", "BA15S", "P21W"]
+        "respuesta_cliente": "¡Hola! Para tu motor Caterpillar 3406E (serie 2WS), las mejores opciones de juegos de anillos o kits de reparación (Overhaul) disponibles en el mercado incluyen las referencias de equipo pesado:\\n\\n- *Interstate-McBee* (ref. *M-RS3406E2* / *RSC15E2*): Excelente calidad ISO 9001:2015, ideales si conservas tus pistones articulados estándar.\\n- *Caterpillar OEM* (ref. *1388506*): Calidad original de planta.\\n- *IPD Parts / PAI*: Recomendado para pistones de acero de una sola pieza.\\n\\nTe sugerimos verificar el tipo de pistón instalado para asegurar la compatibilidad exacta. Quedamos a tus órdenes.",
+        "numeros_parte": ["M-RS3406E2", "RSC15E2", "1388506"]
     }}
     
     Responde ÚNICAMENTE con el formato JSON estructurado solicitado, sin texto adicional ni bloques de código markdown.
