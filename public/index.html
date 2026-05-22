@@ -178,6 +178,119 @@
         @media (max-width: 768px) {
             .container { grid-template-columns: 1fr; }
         }
+
+        /* MODAL DE USUARIOS */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            width: 90%;
+            max-width: 750px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            margin: auto;
+        }
+
+        @keyframes modalFadeIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .close-btn:hover {
+            color: var(--text-main);
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .form-control {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.3s ease;
+            width: 100%;
+        }
+
+        .form-control:focus {
+            border-color: var(--accent);
+        }
+
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .badge-admin { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-vendedor { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-visualizador { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+        .action-icon {
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            font-size: 1.15rem;
+            opacity: 0.8;
+            background: none;
+            border: none;
+            padding: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-icon:hover {
+            transform: scale(1.2);
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -188,6 +301,9 @@
             <a href="/api/allow-search" style="text-decoration: none; display: flex; align-items: center; gap: 0.5rem; background: var(--accent); color: white; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: all 0.3s ease;" onmouseover="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent-hover'); this.style.transform='translateY(-2px)'" onmouseout="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent'); this.style.transform='translateY(0)'">
                 🔍 Buscador de Refacciones
             </a>
+            <button id="adminUsersBtn" onclick="openUserManagement()" style="display: none; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.3s ease; align-items: center; gap: 0.5rem;" onmouseover="this.style.background='rgba(59, 130, 246, 0.25)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='rgba(59, 130, 246, 0.15)'; this.style.transform='translateY(0)'">
+                ⚙️ Administrar Usuarios
+            </button>
             <button onclick="handleLogout()" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.5rem;" onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'; this.style.transform='translateY(0)'">
                 🚪 Cerrar Sesión
             </button>
@@ -357,7 +473,65 @@
         </div>
     </div>
 
+    <!-- MODAL DE ADMINISTRACIÓN DE USUARIOS -->
+    <div id="userManagementModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeUserManagement()">&times;</button>
+            <h2 class="panel-title" style="font-size: 1.6rem; font-weight: 800; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.75rem; margin-bottom: 1.5rem; background: linear-gradient(to right, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                ⚙️ Administración de Usuarios
+            </h2>
+
+            <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 2rem; align-items: start;">
+                <!-- FORMULARIO DE ALTA -->
+                <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-radius: 1.2rem; padding: 1.5rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; color: var(--text-main);">➕ Registrar Usuario</h3>
+                    <form id="createUserForm" onsubmit="handleCreateUser(event)">
+                        <div class="form-group">
+                            <label for="newUsername">Nombre de Usuario</label>
+                            <input type="text" id="newUsername" class="form-control" placeholder="ej. juan_ventas" required autocomplete="username">
+                        </div>
+                        <div class="form-group">
+                            <label for="newPassword">Contraseña</label>
+                            <input type="password" id="newPassword" class="form-control" placeholder="••••••••" required autocomplete="new-password">
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserRole">Rol</label>
+                            <select id="newUserRole" class="form-control" required style="background: rgba(0,0,0,0.5); color: white;">
+                                <option value="vendedor">Vendedor</option>
+                                <option value="visualizador">Visualizador</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn" style="margin-top: 0.5rem;">Crear Usuario</button>
+                    </form>
+                    <div id="createUserStatus" style="margin-top: 1rem; text-align: center; font-size: 0.9rem; font-weight: 600;"></div>
+                </div>
+
+                <!-- LISTA DE USUARIOS -->
+                <div>
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; color: var(--text-main);">👥 Usuarios Activos</h3>
+                    <div class="table-container" style="max-height: 350px; overflow-y: auto; margin-top: 0;">
+                        <table class="data-table" style="margin-top: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Usuario</th>
+                                    <th>Rol</th>
+                                    <th style="text-align: right;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userListBody">
+                                <!-- Dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let currentUser = null;
+
         // Cargar Estadísticas
         async function loadStats() {
             try {
@@ -406,18 +580,25 @@
                 const tbody = document.getElementById('body-clients');
                 tbody.innerHTML = '';
                 
+                const isVisualizador = currentUser && currentUser.role === 'visualizador';
+
                 clients.forEach(client => {
                     const tr = document.createElement('tr');
                     // Mostrar real_phone si está disponible, si no, limpiar el ID opaco como fallback
                     const displayPhone = client.real_phone || client.phone_number.replace('@c.us', '').replace('@lid', '');
+                    
+                    const disabledAttr = isVisualizador ? 'disabled' : '';
+                    const buttonStyle = isVisualizador ? 'background: #4b5563; opacity: 0.5; cursor: not-allowed;' : 'background: var(--success);';
+                    const buttonOnClick = isVisualizador ? '' : `onclick="saveClientNumber('${client.phone_number}')"`;
+
                     tr.innerHTML = `
                         <td>${displayPhone}</td>
                         <td><strong>${client.client_name}</strong></td>
                         <td>
-                            <input type="text" id="client-num-${client.phone_number}" value="${client.client_number || ''}" placeholder="Dejar en blanco si no tiene" style="padding: 0.4rem; border-radius: 0.3rem; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.3); color: white; width: 100%;">
+                            <input type="text" id="client-num-${client.phone_number}" value="${client.client_number || ''}" placeholder="Dejar en blanco si no tiene" style="padding: 0.4rem; border-radius: 0.3rem; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.3); color: white; width: 100%;" ${disabledAttr}>
                         </td>
                         <td>
-                            <button class="btn btn-sm" onclick="saveClientNumber('${client.phone_number}')" style="background: var(--success); width: 100%;">Guardar</button>
+                            <button class="btn btn-sm" ${buttonOnClick} style="${buttonStyle} width: 100%;" ${disabledAttr}>Guardar</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -525,10 +706,256 @@
             link.href = `/api/download-sample-excel?type=${type}`;
         }
 
-        loadBotStatus();
-        loadStats();
-        loadClients();
-        updateDownloadLink();
+        // Cargar Sesión Activa y verificar roles
+        async function initSession() {
+            try {
+                const response = await fetch('/api/session-info');
+                const data = await response.json();
+                if (data.success) {
+                    currentUser = data;
+                    
+                    // Mostrar botón de administración si es admin
+                    const adminBtn = document.getElementById('adminUsersBtn');
+                    if (data.role === 'admin') {
+                        adminBtn.style.display = 'inline-flex';
+                    } else {
+                        adminBtn.style.display = 'none';
+                    }
+
+                    // Bloquear importación si es visualizador
+                    if (data.role === 'visualizador') {
+                        applyVisualizadorRestrictions();
+                    }
+                }
+            } catch (err) {
+                console.error("Error al obtener información de sesión:", err);
+            }
+        }
+
+        function applyVisualizadorRestrictions() {
+            // Deshabilitar select, inputs y botones de carga de excel
+            document.getElementById('uploadType').disabled = true;
+            document.getElementById('excelFile').disabled = true;
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('uploadBtn').style.opacity = '0.5';
+            document.getElementById('uploadBtn').style.cursor = 'not-allowed';
+            document.getElementById('dropzone').style.pointerEvents = 'none';
+            document.getElementById('dropzone').style.opacity = '0.7';
+
+            // Agregar un aviso elegante de que el rol es de sólo lectura
+            const uploadForm = document.getElementById('uploadForm');
+            const banner = document.createElement('div');
+            banner.style.background = 'rgba(239, 68, 68, 0.15)';
+            banner.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+            banner.style.color = '#f87171';
+            banner.style.padding = '1rem';
+            banner.style.borderRadius = '0.8rem';
+            banner.style.marginBottom = '1.25rem';
+            banner.style.fontSize = '0.9rem';
+            banner.style.fontWeight = '600';
+            banner.style.textAlign = 'center';
+            banner.innerHTML = '⚠️ Su cuenta tiene rol de <strong>Visualizador</strong> (Lectura). Las cargas de inventario están deshabilitadas.';
+            uploadForm.insertBefore(banner, uploadForm.firstChild);
+        }
+
+        // CONTROL DEL MODAL DE USUARIOS
+        function openUserManagement() {
+            document.getElementById('userManagementModal').style.display = 'flex';
+            loadUserList();
+        }
+
+        function closeUserManagement() {
+            document.getElementById('userManagementModal').style.display = 'none';
+            document.getElementById('createUserStatus').textContent = '';
+            document.getElementById('createUserForm').reset();
+        }
+
+        // Cerrar modal al hacer clic fuera del contenido
+        window.addEventListener('click', (event) => {
+            const modal = document.getElementById('userManagementModal');
+            if (event.target === modal) {
+                closeUserManagement();
+            }
+        });
+
+        async function loadUserList() {
+            const tbody = document.getElementById('userListBody');
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Cargando usuarios...</td></tr>';
+            
+            try {
+                const response = await fetch('/api/admin/users');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color: var(--danger);">Error: ${data.error}</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                if (data.users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No hay usuarios registrados.</td></tr>';
+                    return;
+                }
+
+                data.users.forEach(user => {
+                    const tr = document.createElement('tr');
+                    
+                    // Determinar si es el usuario actual en sesión
+                    const isSelf = currentUser && currentUser.username.toLowerCase() === user.username.toLowerCase();
+                    const selfLabel = isSelf ? ' <span style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">(Tú)</span>' : '';
+                    
+                    let badgeClass = 'badge-vendedor';
+                    if (user.role === 'admin') badgeClass = 'badge-admin';
+                    else if (user.role === 'visualizador') badgeClass = 'badge-visualizador';
+                    
+                    let roleSelect = '';
+                    if (isSelf) {
+                        roleSelect = `<span class="badge ${badgeClass}">${user.role}</span>${selfLabel}`;
+                    } else {
+                        roleSelect = `
+                            <select onchange="changeUserRole('${user.username}', this.value)" style="background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 0.3rem; color: white; padding: 0.25rem; font-size: 0.85rem; outline: none; cursor: pointer;">
+                                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrador</option>
+                                <option value="vendedor" ${user.role === 'vendedor' ? 'selected' : ''}>Vendedor</option>
+                                <option value="visualizador" ${user.role === 'visualizador' ? 'selected' : ''}>Visualizador</option>
+                            </select>
+                        `;
+                    }
+
+                    const deleteBtn = isSelf 
+                        ? `<button class="action-icon" style="opacity: 0.3; cursor: not-allowed;" title="No puedes eliminarte a ti mismo" disabled>🗑️</button>` 
+                        : `<button class="action-icon" onclick="deleteUser('${user.username}')" style="color: var(--danger);" title="Eliminar Usuario">🗑️</button>`;
+
+                    tr.innerHTML = `
+                        <td><strong>${user.username}</strong></td>
+                        <td>${roleSelect}</td>
+                        <td style="text-align: right; display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center;">
+                            <button class="action-icon" onclick="resetUserPassword('${user.username}')" style="color: #fbbf24;" title="Restablecer Contraseña">🔑</button>
+                            ${deleteBtn}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color: var(--danger);">Error de conexión</td></tr>`;
+            }
+        }
+
+        async function handleCreateUser(event) {
+            event.preventDefault();
+            const usernameInput = document.getElementById('newUsername');
+            const passwordInput = document.getElementById('newPassword');
+            const roleSelect = document.getElementById('newUserRole');
+            const statusDiv = document.getElementById('createUserStatus');
+            
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+            const role = roleSelect.value;
+
+            statusDiv.textContent = 'Creando...';
+            statusDiv.style.color = 'var(--text-muted)';
+
+            try {
+                const response = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.textContent = `✅ Usuario '${username}' creado.`;
+                    statusDiv.style.color = 'var(--success)';
+                    usernameInput.value = '';
+                    passwordInput.value = '';
+                    roleSelect.value = 'vendedor';
+                    loadUserList();
+                } else {
+                    statusDiv.textContent = `❌ ${data.error}`;
+                    statusDiv.style.color = 'var(--danger)';
+                }
+            } catch (err) {
+                statusDiv.textContent = '❌ Error al crear usuario';
+                statusDiv.style.color = 'var(--danger)';
+            }
+        }
+
+        async function changeUserRole(username, role) {
+            try {
+                const response = await fetch(`/api/admin/users/${encodeURIComponent(username)}/role`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadUserList();
+                } else {
+                    alert(`Error al actualizar rol: ${data.error}`);
+                    loadUserList();
+                }
+            } catch (err) {
+                alert('Error de red al actualizar rol.');
+                loadUserList();
+            }
+        }
+
+        async function resetUserPassword(username) {
+            const newPassword = prompt(`Ingrese la nueva contraseña para '${username}':`);
+            if (newPassword === null) return;
+            
+            if (newPassword.trim().length === 0) {
+                alert('La contraseña no puede estar vacía.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${encodeURIComponent(username)}/password`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: newPassword })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Contraseña de '${username}' restablecida correctamente.`);
+                } else {
+                    alert(`❌ Error al restablecer contraseña: ${data.error}`);
+                }
+            } catch (err) {
+                alert('❌ Error de red al restablecer contraseña.');
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`¿Está seguro de que desea eliminar al usuario '${username}'?\nEsta acción no se puede deshacer.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${encodeURIComponent(username)}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadUserList();
+                } else {
+                    alert(`Error al eliminar usuario: ${data.error}`);
+                }
+            } catch (err) {
+                alert('Error de red al eliminar usuario.');
+            }
+        }
+
+        // Inicialización General
+        async function init() {
+            await initSession();
+            loadBotStatus();
+            loadStats();
+            loadClients();
+            updateDownloadLink();
+        }
+
+        init();
         
         // Actualizar cada 5 segundos el estado del bot (Health Check)
         setInterval(loadBotStatus, 5000);

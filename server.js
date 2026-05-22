@@ -5,7 +5,13 @@ const fs = require('fs');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const path = require('path');
-const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, updateClientNumber, getAvailableStates, getBranchesDirectory, deductInventory } = require('./db');
+const { 
+    supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getClients, 
+    updateClientNumber, getAvailableStates, getBranchesDirectory, deductInventory,
+    getDashboardUsers, createDashboardUser, deleteDashboardUser, updateDashboardUserRole,
+    resetDashboardUserPassword, authenticateDashboardUser 
+} = require('./db');
+
 
 // ==========================================
 // 1. CONFIGURACIÓN DEL SERVIDOR WEB (DASHBOARD)
@@ -96,27 +102,72 @@ app.get('/api/allow-search', (req, res) => {
     res.redirect('/buscar.html');
 });
 
-// Endpoint: Iniciar Sesión (Login)
-app.post('/api/login', (req, res) => {
+// Middleware: Requerir Rol Específico
+function requireRole(role) {
+    return (req, res, next) => {
+        if (req.session && req.session.role === role) {
+            return next();
+        }
+        res.status(403).json({ error: "Acceso denegado. Permisos insuficientes." });
+    };
+}
+
+// Endpoint: Iniciar Sesión (Login) con soporte DB + Fallback .env
+app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: "Usuario y contraseña son obligatorios." });
+    }
+    
+    // 1. Intentar validar con la base de datos/archivo local
+    try {
+        const authResult = await authenticateDashboardUser(username, password);
+        if (authResult.success) {
+            const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            activeSessions[token] = {
+                username: authResult.user.username,
+                role: authResult.user.role,
+                expires: Date.now() + 24 * 60 * 60 * 1000,
+                allowedSearch: false
+            };
+            // Establecer cookie por 24 horas
+            res.setHeader('Set-Cookie', `session_token=${token}; Path=/; HttpOnly; Max-Age=${24 * 60 * 60}; SameSite=Lax`);
+            return res.json({ success: true });
+        }
+    } catch (e) {
+        console.error("Error durante autenticación en DB:", e);
+    }
+    
+    // 2. Fallback: Super-Administrador (.env)
     const adminUser = process.env.DASHBOARD_USER || 'admin';
     const adminPass = process.env.DASHBOARD_PASS || 'admin123';
     
-    if (username === adminUser && password === adminPass) {
+    if (username.trim().toLowerCase() === adminUser.toLowerCase() && password === adminPass) {
         const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
-        // Expiración en 24 horas
         activeSessions[token] = {
-            username: username,
+            username: adminUser,
+            role: 'admin', // Super-admin es siempre administrador
             expires: Date.now() + 24 * 60 * 60 * 1000,
             allowedSearch: false
         };
-        
-        // Establecer cookie
+        // Establecer cookie por 24 horas
         res.setHeader('Set-Cookie', `session_token=${token}; Path=/; HttpOnly; Max-Age=${24 * 60 * 60}; SameSite=Lax`);
         return res.json({ success: true });
     }
     
     res.status(400).json({ error: "Usuario o contraseña incorrectos." });
+});
+
+// Endpoint: Obtener Información de la Sesión Activa
+app.get('/api/session-info', (req, res) => {
+    if (req.session) {
+        return res.json({ 
+            success: true, 
+            username: req.session.username, 
+            role: req.session.role 
+        });
+    }
+    res.status(401).json({ error: "No autenticado." });
 });
 
 // Endpoint: Cerrar Sesión (Logout)
@@ -129,6 +180,109 @@ app.post('/api/logout', (req, res) => {
     res.setHeader('Set-Cookie', 'session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly');
     res.json({ success: true });
 });
+
+// ---------------------------------------------------------
+// RUTAS DE ADMINISTRACIÓN DE USUARIOS (SOLO ADMINISTRADORES)
+// ---------------------------------------------------------
+
+// GET: Obtener todos los usuarios
+app.get('/api/admin/users', requireRole('admin'), async (req, res) => {
+    try {
+        const users = await getDashboardUsers();
+        res.json({ success: true, users });
+    } catch (e) {
+        res.status(500).json({ error: "Error al listar usuarios: " + e.message });
+    }
+});
+
+// POST: Crear un nuevo usuario (Alta)
+app.post('/api/admin/users', requireRole('admin'), async (req, res) => {
+    const { username, password, role } = req.body;
+    if (!username || !password || !role) {
+        return res.status(400).json({ error: "Todos los campos son obligatorios." });
+    }
+    
+    const validRoles = ['admin', 'vendedor', 'visualizador'];
+    if (!validRoles.includes(role)) {
+        return res.status(400).json({ error: "Rol no válido." });
+    }
+    
+    try {
+        const result = await createDashboardUser(username, password, role);
+        if (result.success) {
+            res.json({ success: true, user: result.data });
+        } else {
+            res.status(400).json({ error: result.error });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Error al crear usuario: " + e.message });
+    }
+});
+
+// PUT: Modificar el rol de un usuario
+app.put('/api/admin/users/:username/role', requireRole('admin'), async (req, res) => {
+    const { username } = req.params;
+    const { role } = req.body;
+    
+    const validRoles = ['admin', 'vendedor', 'visualizador'];
+    if (!validRoles.includes(role)) {
+        return res.status(400).json({ error: "Rol no válido." });
+    }
+    
+    try {
+        const result = await updateDashboardUserRole(username, role);
+        if (result.success) {
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: result.error });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Error al cambiar rol: " + e.message });
+    }
+});
+
+// PUT: Resetear la contraseña de un usuario
+app.put('/api/admin/users/:username/password', requireRole('admin'), async (req, res) => {
+    const { username } = req.params;
+    const { password } = req.body;
+    
+    if (!password || password.trim().length === 0) {
+        return res.status(400).json({ error: "La contraseña no puede estar vacía." });
+    }
+    
+    try {
+        const result = await resetDashboardUserPassword(username, password);
+        if (result.success) {
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: result.error });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Error al resetear contraseña: " + e.message });
+    }
+});
+
+// DELETE: Eliminar un usuario (Baja)
+app.delete('/api/admin/users/:username', requireRole('admin'), async (req, res) => {
+    const { username } = req.params;
+    
+    // Evitar que el administrador en sesión se elimine a sí mismo
+    if (req.session && req.session.username.toLowerCase() === username.toLowerCase()) {
+        return res.status(400).json({ error: "No puedes eliminar tu propio usuario en una sesión activa." });
+    }
+    
+    try {
+        const result = await deleteDashboardUser(username);
+        if (result.success) {
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: result.error });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "Error al eliminar usuario: " + e.message });
+    }
+});
+
 
 // Rutas de Archivos HTML Protegidos (definidas ANTES de express.static)
 app.get('/login.html', (req, res) => {
@@ -169,6 +323,9 @@ app.get('/api/stats', async (req, res) => {
 
 // API: Subir Excel de Inventario
 app.post('/api/upload-inventory', upload.single('excel'), async (req, res) => {
+    if (req.session && req.session.role === 'visualizador') {
+        return res.status(403).json({ error: "Permisos insuficientes. El rol de Visualizador no puede realizar esta acción." });
+    }
     if (!req.file) return res.status(400).send('No se subió archivo.');
     
     try {
@@ -245,6 +402,9 @@ app.post('/api/upload-inventory', upload.single('excel'), async (req, res) => {
 
 // API: Subir Excel de Catálogo de Sucursales
 app.post('/api/upload-branches', upload.single('excel'), async (req, res) => {
+    if (req.session && req.session.role === 'visualizador') {
+        return res.status(403).json({ error: "Permisos insuficientes. El rol de Visualizador no puede realizar esta acción." });
+    }
     if (!req.file) return res.status(400).send('No se subió archivo.');
     
     try {
@@ -297,6 +457,9 @@ app.post('/api/upload-branches', upload.single('excel'), async (req, res) => {
 
 // API: Subir Excel de Catálogo de Refacciones (Solo piezas)
 app.post('/api/upload-parts', upload.single('excel'), async (req, res) => {
+    if (req.session && req.session.role === 'visualizador') {
+        return res.status(403).json({ error: "Permisos insuficientes. El rol de Visualizador no puede realizar esta acción." });
+    }
     if (!req.file) return res.status(400).send('No se subió archivo.');
     
     try {

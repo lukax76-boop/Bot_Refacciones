@@ -1,8 +1,13 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
+const LOCAL_USERS_FILE = path.join(__dirname, 'dashboard_users.json');
+
 
 let supabase = null;
 if (supabaseUrl && supabaseKey && supabaseUrl !== 'tu_supabase_url_aqui') {
@@ -377,6 +382,222 @@ async function deductInventory(branchId, partNumber, quantity) {
     return false;
 }
 
+// ---------------------------------------------------------
+// FUNCIONES DE ADMINISTRACIÓN DE USUARIOS (DASHBOARD)
+// ---------------------------------------------------------
+
+function hashPassword(password) {
+    return crypto.createHash('sha256').update(password + 'refacciones_salt_123').digest('hex');
+}
+
+// Helpers locales para leer y escribir el archivo JSON fallback
+function readLocalUsers() {
+    try {
+        if (fs.existsSync(LOCAL_USERS_FILE)) {
+            const content = fs.readFileSync(LOCAL_USERS_FILE, 'utf8');
+            return JSON.parse(content);
+        }
+    } catch (e) {
+        console.error("❌ Error leyendo archivo local de usuarios:", e);
+    }
+    return [];
+}
+
+function writeLocalUsers(users) {
+    try {
+        fs.writeFileSync(LOCAL_USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error("❌ Error escribiendo archivo local de usuarios:", e);
+        return false;
+    }
+}
+
+async function getDashboardUsers() {
+    if (supabase) {
+        try {
+            const { data, error } = await supabase.from('dashboard_users').select('id, username, role, created_at').order('username', { ascending: true });
+            if (!error) {
+                return data || [];
+            }
+            console.warn("⚠️ Supabase 'dashboard_users' no disponible, usando fallback local:", error.message || error);
+        } catch (err) {
+            console.warn("⚠️ Excepción consultando 'dashboard_users' en Supabase, usando fallback local:", err.message);
+        }
+    }
+    
+    // Fallback local
+    const users = readLocalUsers();
+    // Retornamos sin hashes por seguridad en el listado
+    return users.map(u => ({ id: u.id, username: u.username, role: u.role, created_at: u.created_at }));
+}
+
+async function createDashboardUser(username, password, role) {
+    const hash = hashPassword(password);
+    const cleanUsername = username.trim().toLowerCase();
+    
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('dashboard_users')
+                .insert([{ username: cleanUsername, password_hash: hash, role }])
+                .select('id, username, role, created_at');
+            if (!error) {
+                return { success: true, data: data[0] };
+            }
+            // Si el error es de violación de unicidad
+            if (error.code === '23505') {
+                return { success: false, error: 'El nombre de usuario ya está registrado.' };
+            }
+            console.warn("⚠️ Error en Supabase createDashboardUser, usando fallback local:", error.message || error);
+        } catch (err) {
+            console.warn("⚠️ Excepción en Supabase createDashboardUser, usando fallback local:", err.message);
+        }
+    }
+    
+    // Fallback local
+    const users = readLocalUsers();
+    const exists = users.some(u => u.username === cleanUsername);
+    if (exists) {
+        return { success: false, error: 'El nombre de usuario ya está registrado.' };
+    }
+    
+    const newUser = {
+        id: Date.now(),
+        username: cleanUsername,
+        password_hash: hash,
+        role: role,
+        created_at: new Date().toISOString()
+    };
+    users.push(newUser);
+    writeLocalUsers(users);
+    
+    // Retornamos sin hash
+    const { password_hash, ...safeUser } = newUser;
+    return { success: true, data: safeUser };
+}
+
+async function deleteDashboardUser(username) {
+    const cleanUsername = username.trim().toLowerCase();
+    
+    if (supabase) {
+        try {
+            const { error } = await supabase.from('dashboard_users').delete().eq('username', cleanUsername);
+            if (!error) {
+                return { success: true };
+            }
+            console.warn("⚠️ Error en Supabase deleteDashboardUser, usando fallback local:", error.message || error);
+        } catch (err) {
+            console.warn("⚠️ Excepción en Supabase deleteDashboardUser, usando fallback local:", err.message);
+        }
+    }
+    
+    // Fallback local
+    let users = readLocalUsers();
+    const initialLength = users.length;
+    users = users.filter(u => u.username !== cleanUsername);
+    if (users.length === initialLength) {
+        return { success: false, error: 'Usuario no encontrado.' };
+    }
+    writeLocalUsers(users);
+    return { success: true };
+}
+
+async function updateDashboardUserRole(username, role) {
+    const cleanUsername = username.trim().toLowerCase();
+    
+    if (supabase) {
+        try {
+            const { error } = await supabase.from('dashboard_users').update({ role }).eq('username', cleanUsername);
+            if (!error) {
+                return { success: true };
+            }
+            console.warn("⚠️ Error en Supabase updateDashboardUserRole, usando fallback local:", error.message || error);
+        } catch (err) {
+            console.warn("⚠️ Excepción en Supabase updateDashboardUserRole, usando fallback local:", err.message);
+        }
+    }
+    
+    // Fallback local
+    const users = readLocalUsers();
+    const user = users.find(u => u.username === cleanUsername);
+    if (!user) {
+        return { success: false, error: 'Usuario no encontrado.' };
+    }
+    user.role = role;
+    writeLocalUsers(users);
+    return { success: true };
+}
+
+async function resetDashboardUserPassword(username, newPassword) {
+    const cleanUsername = username.trim().toLowerCase();
+    const hash = hashPassword(newPassword);
+    
+    if (supabase) {
+        try {
+            const { error } = await supabase.from('dashboard_users').update({ password_hash: hash }).eq('username', cleanUsername);
+            if (!error) {
+                return { success: true };
+            }
+            console.warn("⚠️ Error en Supabase resetDashboardUserPassword, usando fallback local:", error.message || error);
+        } catch (err) {
+            console.warn("⚠️ Excepción en Supabase resetDashboardUserPassword, usando fallback local:", err.message);
+        }
+    }
+    
+    // Fallback local
+    const users = readLocalUsers();
+    const user = users.find(u => u.username === cleanUsername);
+    if (!user) {
+        return { success: false, error: 'Usuario no encontrado.' };
+    }
+    user.password_hash = hash;
+    writeLocalUsers(users);
+    return { success: true };
+}
+
+async function authenticateDashboardUser(username, password) {
+    const cleanUsername = username.trim().toLowerCase();
+    const hash = hashPassword(password);
+    
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('dashboard_users')
+                .select('*')
+                .eq('username', cleanUsername)
+                .maybeSingle();
+            
+            if (!error && data) {
+                if (data.password_hash === hash) {
+                    return { success: true, user: { username: data.username, role: data.role } };
+                } else {
+                    return { success: false, error: 'Contraseña incorrecta.' };
+                }
+            }
+            // Si el error no es nulo y no es por falta de tabla, logueamos
+            if (error) {
+                console.warn("⚠️ Error en Supabase authenticateDashboardUser, usando fallback local:", error.message || error);
+            }
+        } catch (err) {
+            console.warn("⚠️ Excepción en Supabase authenticateDashboardUser, usando fallback local:", err.message);
+        }
+    }
+    
+    // Fallback local
+    const users = readLocalUsers();
+    const user = users.find(u => u.username === cleanUsername);
+    if (user) {
+        if (user.password_hash === hash) {
+            return { success: true, user: { username: user.username, role: user.role } };
+        } else {
+            return { success: false, error: 'Contraseña incorrecta.' };
+        }
+    }
+    
+    return { success: false, error: 'Usuario no encontrado.' };
+}
+
 module.exports = {
     supabase,
     getUser,
@@ -388,5 +609,12 @@ module.exports = {
     updateClientNumber,
     getAvailableStates,
     getBranchesDirectory,
-    deductInventory
+    deductInventory,
+    getDashboardUsers,
+    createDashboardUser,
+    deleteDashboardUser,
+    updateDashboardUserRole,
+    resetDashboardUserPassword,
+    authenticateDashboardUser
 };
+
