@@ -292,13 +292,15 @@ async function getStats() {
     const { data: detailedMisses } = await supabase.from('analytics')
         .select('created_at, state, search_query')
         .eq('found', false)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
     // Ventas concretadas (con JOIN a branches para el nombre)
     const { data: detailedOrders } = await supabase.from('analytics')
         .select(`created_at, state, search_query, branches(name)`)
         .eq('ordered', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
     return {
         totalSearches: searches || 0,
@@ -312,9 +314,10 @@ async function getStats() {
 async function getClients() {
     if (!supabase) return [];
     const { data } = await supabase.from('users')
-        .select('phone_number, client_name, client_number, real_phone')
+        .select('phone_number, client_name, client_number, real_phone, last_interaction')
         .not('client_name', 'is', null)
-        .order('client_name', { ascending: true });
+        .order('last_interaction', { ascending: false })
+        .limit(100);
     return data || [];
 }
 

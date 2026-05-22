@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     step TEXT DEFAULT 'idle',
     client_name TEXT,
     client_number TEXT,
-    real_phone TEXT
+    real_phone TEXT,
+    last_interaction TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 5. Tabla de Analítica Histórica y Oportunidades Perdidas (analytics)
