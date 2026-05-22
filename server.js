@@ -606,6 +606,42 @@ function extractVINAndPart(text) {
     };
 }
 
+function detectVinOrMotor(text) {
+    if (!text) return null;
+    
+    // 1. Buscar VIN estándar de 17 caracteres en el texto original (con límites de palabra o espacio)
+    const standardVinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/i);
+    if (standardVinMatch) return standardVinMatch[0].toUpperCase();
+
+    // 2. Buscar series de motor Caterpillar (prefijo de 3 alfanuméricos + 5 dígitos, ej: 2WS12345, 6NZ04123)
+    const catMotorMatch = text.match(/\b([A-Z0-9]{3}\d{5})\b/i);
+    if (catMotorMatch) return catMotorMatch[1].toUpperCase();
+
+    // 3. Buscar número de serie Cummins de 8 dígitos
+    const cumminsMotorMatch = text.match(/\b(\d{8})\b/);
+    if (cumminsMotorMatch) return cumminsMotorMatch[1];
+
+    // 4. Buscar número de motor genérico (5-10 dígitos de forma explícita)
+    const genericMotorMatch = text.match(/(?:motor|motor:\s*|motor #\s*)([0-9A-Z]{5,10})/i) || 
+                              text.match(/\b\d{5,10}\b/);
+    if (genericMotorMatch) return genericMotorMatch[genericMotorMatch.length - 1].toUpperCase();
+
+    // 5. Si el texto original tiene espacios, podemos limpiarlo y buscar un VIN/Motor de 8-17 caracteres que contenga números y letras mezclados
+    // (pero evitando palabras puramente alfabéticas como "FILTRODEACEITE")
+    const squished = text.replace(/[-\s]/g, '').toUpperCase();
+    const hybridMatch = squished.match(/[A-Z0-9]{8,17}/);
+    if (hybridMatch) {
+        const potential = hybridMatch[0];
+        const hasDigits = /\d/.test(potential);
+        const hasLetters = /[A-Z]/.test(potential);
+        if (hasDigits && (potential.length >= 17 || hasLetters)) {
+            return potential;
+        }
+    }
+
+    return null;
+}
+
 // Helper: Enviar mensaje mediante Meta Cloud API
 async function sendMetaMessage(phone, content, type = 'text', interactiveOptions = null) {
     const token = process.env.META_ACCESS_TOKEN;
@@ -1335,16 +1371,23 @@ async function processMessageLogic(phone, text, senderName) {
                 return;
             }
 
-            await sendMetaMessage(phone, "🔍 Analizando tu consulta con nuestro asistente de IA y buscando refacciones compatibles en la web... Esto puede tardar hasta un minuto. Por favor, espera.");
-
             // Detectar si el texto entrante ya contiene un VIN o número de serie de motor
-            const normalizedInput = text.replace(/[-\s]/g, '').toUpperCase();
-            const hasVin = /[A-Z0-9]{8,17}/.test(normalizedInput);
+            const detectedVin = detectVinOrMotor(text);
+            if (detectedVin) {
+                userVins[phone] = detectedVin;
+            }
+            const currentVin = userVins[phone];
             
+            let analysisMsg = "🔍 Analizando tu consulta con nuestro asistente de IA y buscando refacciones compatibles en la web... Esto puede tardar hasta un minuto. Por favor, espera.";
+            if (currentVin) {
+                analysisMsg = `🔍 Analizando tu consulta para el VIN/Motor *${currentVin}* con nuestro asistente de IA y buscando refacciones compatibles en la web... Esto puede tardar hasta un minuto. Por favor, espera.`;
+            }
+            await sendMetaMessage(phone, analysisMsg);
+
             let finalQuery = text;
-            if (!hasVin && userVins[phone]) {
-                finalQuery = `${text} para el VIN/Motor ${userVins[phone]}`;
-                console.log(`[AYUDA] Reutilizando VIN/Motor en caché (${userVins[phone]}) para consulta: "${text}"`);
+            if (!detectedVin && currentVin) {
+                finalQuery = `${text} para el VIN/Motor ${currentVin}`;
+                console.log(`[AYUDA] Reutilizando VIN/Motor en caché (${currentVin}) para consulta: "${text}"`);
             }
 
             try {
@@ -1452,7 +1495,8 @@ async function processMessageLogic(phone, text, senderName) {
                         userSearchSessions[phone] = { type: 'foreign_pending', query: text, results: globalResults };
                         await updateUser(phone, { step: 'asking_foreign' });
 
-                        const msg = `💡 No encontramos existencias de estas refacciones en sucursales de *${state}*.\n\nSin embargo, detectamos que *sí están disponibles* en sucursales foráneas de otros estados.\n\n¿Deseas que te mostremos las opciones disponibles de otros estados para solicitarla de allá?`;
+                        const candidatesStr = candidates.length > 0 ? ` para las refacciones sugeridas (${candidates.map(c => `*${c}*`).join(', ')})` : '';
+                        const msg = `💡 No encontramos existencias en sucursales de *${state}*${candidatesStr}.\n\nSin embargo, detectamos que *sí están disponibles* en sucursales foráneas de otros estados.\n\n¿Deseas que te mostremos las opciones disponibles de otros estados para solicitarla de allá?`;
 
                         await sendMetaMessage(phone, null, 'interactive', {
                             type: "button",
@@ -1472,9 +1516,22 @@ async function processMessageLogic(phone, text, senderName) {
                     console.log(`[BUSQUEDA INVENTARIO] Sin existencias a nivel nacional. Enviando mensaje de NO DISPONIBILIDAD a ${phone}...`);
                     await logAnalytics({ phone_number: phone, search_query: text, found: false, state: state });
                     await updateUser(phone, { step: 'help_no_stock_options' });
-                    const noStockMsg = `⚠️ *Lamentamos informarle que, por el momento, no tenemos disponible la pieza solicitada en ninguna de nuestras sucursales.* No se encontraron existencias en el inventario nacional para los números de parte sugeridos.\n\n¿Qué deseas hacer ahora?\n\n👉 Escribe *[O]* para buscar otra refacción.\n👉 Escribe *[V]* para vaciar carrito y reiniciar.\n👉 Escribe *[R]* para regresar al menú principal.`;
-                    await sendMetaMessage(phone, noStockMsg);
-                    console.log(`[BUSQUEDA INVENTARIO] Mensaje de NO DISPONIBILIDAD enviado a ${phone}`);
+                    
+                    const candidatesStr = candidates.length > 0 ? ` para las refacciones sugeridas (${candidates.map(c => `*${c}*`).join(', ')})` : '';
+                    const noStockMsg = `⚠️ *Lamentamos informarle que, por el momento, no contamos con existencias de esta pieza en nuestro inventario nacional.*\n\nNo encontramos stock en ninguna de nuestras sucursales para las refacciones compatibles sugeridas${candidatesStr}.\n\n¿Qué deseas hacer ahora?`;
+                    
+                    await sendMetaMessage(phone, null, 'interactive', {
+                        type: "button",
+                        body: { text: noStockMsg },
+                        action: {
+                            buttons: [
+                                { type: "reply", reply: { id: "BUSCAR_OTRA", title: "Buscar Otra" } },
+                                { type: "reply", reply: { id: "VACIAR_CARRITO", title: "Vaciar Carrito" } },
+                                { type: "reply", reply: { id: "REGRESAR_AL_INICIO", title: "Regresar al Inicio" } }
+                            ]
+                        }
+                    });
+                    console.log(`[BUSQUEDA INVENTARIO] Mensaje interactivo de NO DISPONIBILIDAD enviado a ${phone}`);
                     sendMetaVoiceNote(phone, cleanTextForTTS(noStockMsg)).catch(e => console.error("TTS error:", e));
                 } else {
                     // Encontró stock localmente! Presentar opciones al cliente
@@ -1579,23 +1636,23 @@ async function processMessageLogic(phone, text, senderName) {
             const spokenIntent = parseSpokenIntent(text);
             const normalizedText = spokenIntent || text.toUpperCase().trim();
 
-            if (normalizedText === 'OTRA' || normalizedText === 'O') {
+            if (normalizedText === 'OTRA' || normalizedText === 'O' || normalizedText === 'BUSCAR_OTRA') {
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "Dime qué *otra refacción* deseas buscar:");
                 return;
             }
-            if (normalizedText === 'REINICIAR' || normalizedText === 'V') {
+            if (normalizedText === 'REINICIAR' || normalizedText === 'V' || normalizedText === 'VACIAR_CARRITO') {
                 delete userCarts[phone];
                 await updateUser(phone, { step: 'asking_part' });
                 await sendMetaMessage(phone, "🔄 *Conversación reiniciada*. Dime qué refacción buscas:");
                 return;
             }
-            if (normalizedText === 'REGRESAR' || normalizedText === 'R') {
+            if (normalizedText === 'REGRESAR' || normalizedText === 'R' || normalizedText === 'REGRESAR_AL_INICIO') {
                 await updateUser(phone, { step: 'idle' });
                 await processMessageLogic(phone, "hola", user.client_name || senderName);
                 return;
             }
-            await sendMetaMessage(phone, "⚠️ Opción inválida.\n\n👉 Escribe:\n- *[O]* para buscar otra refacción.\n- *[V]* para vaciar carrito y reiniciar.\n- *[R]* para regresar al menú principal.");
+            await sendMetaMessage(phone, "⚠️ Opción inválida. Por favor, selecciona una de las opciones en los botones táctiles de tu pantalla, o escribe:\n\n- *[O]* para buscar otra refacción.\n- *[V]* para vaciar y reiniciar.\n- *[R]* para regresar al menú principal.");
         }
         else if (step === 'asking_foreign') {
             const spokenIntent = parseSpokenIntent(text);
@@ -1782,8 +1839,13 @@ async function processMessageLogic(phone, text, senderName) {
             }
             
             if (normalizedText === 'SI' || normalizedText === 'SÍ') {
-                // Confirmado - proceder con búsqueda
-                await updateUser(phone, { step: 'asking_part' });
+                // Confirmado - proceder con búsqueda en la sección de ayuda/VIN
+                await updateUser(phone, { step: 'asking_help_details' });
+                if (pendingData.vin) {
+                    userVins[phone] = pendingData.vin.trim().toUpperCase();
+                } else if (pendingData.motor) {
+                    userVins[phone] = pendingData.motor.trim().toUpperCase();
+                }
                 delete userPendingItems[phone];
                 const searchText = pendingData.partText || pendingData.originalText;
                 await sendMetaMessage(phone, `✅ VIN/Motor confirmado. Buscando *${searchText}* ahora...`);
