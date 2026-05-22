@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Política de Privacidad - Asistente de Refacciones</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #38bdf8;
+            --primary-glow: rgba(56, 189, 248, 0.15);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, #0f172a);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-top: 0;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 1rem;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-top: 30px;
+            margin-bottom: 12px;
+        }
+
+        p, li {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #cbd5e1;
+            text-align: justify;
+        }
+
+        ul {
+            padding-left: 20px;
+            margin-bottom: 20px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>POLÍTICA DE PRIVACIDAD</h1>
+        <div class="subtitle">Asistente Inteligente de Refacciones y Cotizaciones por WhatsApp y Web</div>
+
+        <p>Esta Política de Privacidad describe cómo se recopilan, utilizan y protegen sus datos personales al interactuar con nuestro <strong>Bot de WhatsApp</strong> y nuestro <strong>Buscador Web de Refacciones</strong>.</p>
+
+        <h2>1. Responsable del Tratamiento de Datos</h2>
+        <p>El responsable del tratamiento de los datos personales recopilados a través de este canal es la empresa refaccionaria que opera el sistema en su localidad comercial. Nos comprometemos a garantizar la confidencialidad, integridad y seguridad de la información proporcionada por nuestros clientes y usuarios.</p>
+
+        <h2>2. Datos Personales que Recopilamos</h2>
+        <p>Al hacer uso de nuestro bot de WhatsApp y buscador web, recolectamos la siguiente información únicamente para la prestación del servicio:</p>
+        <ul>
+            <li><strong>Número de Teléfono (WhatsApp):</strong> Utilizado como identificador de sesión y canal principal para enviar los presupuestos y la información de contacto del vendedor.</li>
+            <li><strong>Nombre de Facturación:</strong> Solicitado en la primera compra de clientes nuevos para personalizar el servicio y facilitar el proceso administrativo.</li>
+            <li><strong>Número de Cliente (ERP):</strong> Almacenado de forma interna para vincular sus cotizaciones con su perfil comercial del sistema de facturación física de la refaccionaria.</li>
+            <li><strong>Mensajes y Notas de Voz:</strong> Los términos de búsqueda ingresados por texto y los audios enviados para cotizar son analizados en tiempo real por el asistente para identificar las piezas del catálogo.</li>
+        </ul>
+
+        <h2>3. Finalidad del Tratamiento de Datos</h2>
+        <p>Sus datos personales son utilizados estrictamente para las siguientes finalidades necesarias:</p>
+        <ul>
+            <li>Consultar existencias de refacciones en tiempo real en la sucursal más cercana a su estado o ubicación geográfica.</li>
+            <li>Generar tickets digitales de resumen de pedido con el cálculo total (IVA incluido).</li>
+            <li>Enlazar su cotización con el agente de ventas correspondiente de forma inmediata mediante nuestro sistema de traspaso de chat (Handoff) para cerrar el cobro y la entrega.</li>
+            <li>Mejorar el entendimiento del bot de WhatsApp mediante la calibración y optimización de las búsquedas interpretadas por Inteligencia Artificial.</li>
+        </ul>
+
+        <h2>4. Transferencia de Datos a Terceros</h2>
+        <p>No vendemos, rentamos ni comercializamos sus datos personales con ningún tercero bajo ninguna circunstancia. Para el correcto funcionamiento del bot, la información se procesa de forma segura mediante conexiones cifradas con las siguientes plataformas tecnológicas aliadas:</p>
+        <ul>
+            <li><strong>Meta Platform Inc. (WhatsApp Business Cloud API):</strong> Infraestructura oficial donde viaja la mensajería del chat.</li>
+            <li><strong>OpenAI L.L.C.:</strong> Utilizado de forma exclusiva para la conversión técnica de notas de voz (audio) a texto plano.</li>
+            <li><strong>Google Cloud (Gemini API):</strong> Motor de Inteligencia Artificial que procesa semánticamente las marcas, motores y números de serie de refacciones solicitados.</li>
+        </ul>
+
+        <h2>5. Seguridad de sus Datos</h2>
+        <p>Implementamos estrictos controles de seguridad físicos, técnicos y administrativos para proteger sus datos personales contra pérdidas, robos, accesos no autorizados o alteraciones. Las contraseñas de los vendedores en el panel de control están cifradas mediante algoritmos criptográficos robustos y las sesiones cuentan con tokens con fecha de expiración.</p>
+
+        <h2>6. Derechos ARCO (Acceso, Rectificación, Cancelación y Oposición)</h2>
+        <p>Usted tiene derecho a conocer qué datos tenemos de su perfil, rectificarlos en caso de que su nombre o número de cliente sea incorrecto, o solicitar la eliminación total de sus registros de la base de datos de nuestro bot de WhatsApp. Para ejercer cualquiera de sus derechos, puede solicitarlo directamente al agente de ventas de la refaccionaria o a través del contacto de atención al cliente provisto en mostrador.</p>
+
+        <div class="footer">
+            &copy; 2026 Sistema Inteligente de Refacciones. Todos los derechos reservados.<br>
+            Desplegado de forma segura bajo protocolo de cifrado SSL/HTTPS.
+        </div>
+    </div>
+</body>
+</html>
