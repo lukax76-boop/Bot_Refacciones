@@ -88,3 +88,25 @@ Pide a tus vendedores que cuando el bot les envíe una confirmación de venta de
 Utiliza el botón &apos;Descargar CSV&apos; en la tabla de Oportunidades Perdidas cada quincena. Es un estudio de mercado gratuito que te dice qué refacciones buscan los clientes en cada estado que no tienes en stock, permitiéndote comprar piezas de alta demanda antes que la competencia.
 [Style: Heading3] 🛡️ Protege tus Credenciales:
 Evita asignar roles de Administrador a personal temporal. El rol de Visualizador es perfecto para directores generales o personal que solo desea monitorear la salud comercial sin alterar los inventarios.
+[Style: Heading1] 7. PROPUESTA COMERCIAL, INVERSIÓN Y MANTENIMIENTO
+[Style: Heading2] Costo de Implementación del Proyecto
+El costo total para el desarrollo, despliegue e integración final del ecosistema completo es de $70,000 MXN.
+Esta inversión se justifica plenamente debido a que no estás adquiriendo una herramienta aislada, sino tres sistemas avanzados interconectados en una única solución unificada:
+1. El Bot Inteligente de WhatsApp para atención automatizada y ventas 24/7.
+2. El Buscador Web Interactivo de refacciones por número de parte e IA.
+3. El Dashboard Administrativo completo con gestión de roles de seguridad e inventarios mediante Excel.
+Un sistema diseñado a la medida que reduce drásticamente la fricción en ventas y optimiza el mostrador en todo momento genera un retorno de inversión (ROI) sumamente acelerado para tu refaccionaria.
+[Style: Heading2] Mantenimiento Técnico y Soporte Mensual
+El costo por concepto de mantenimiento técnico y soporte especializado es de $2,500 MXN mensuales.
+Es fundamental comprender que el mantenimiento en un sistema que implementa Inteligencia Artificial y la API oficial de WhatsApp no es opcional, dado que el ecosistema completo se apoya en servicios en la nube y APIs de terceros con consumo activo que evolucionan constantemente.
+[Style: Heading3] ¿En qué consiste nuestro servicio de Mantenimiento?
+• Monitoreo y Estabilidad de las APIs: La empresa Meta (dueña de WhatsApp) actualiza sus APIs e introduce cambios en sus políticas de mensajería frecuentemente. El mantenimiento técnico garantiza la adaptación constante del código del bot para asegurar que el flujo de compra de tus clientes jamás se rompa.
+• Optimización del Contexto de la IA (Prompt Engineering): Monitoreamos activamente el comportamiento y la manera en que los clientes conversan con el bot. Si detectamos que el bot confunde alguna refacción, número de parte o número de serie de motor, calibramos el contexto y afinamos el comportamiento del modelo de IA (Gemini) para elevar al máximo la precisión de las búsquedas automáticas.
+• Optimización de Base de Datos e Inventarios: Aseguramos que los enlaces entre tus sucursales físicas y las búsquedas en tiempo real se ejecuten a máxima velocidad, evitando la saturación del servidor incluso durante cargas masivas de catálogos mediante plantillas de Excel en horas pico.
+• Soporte Técnico y Corrección de Errores (Bugs): Te garantizamos un acuerdo de nivel de servicio (SLA) con tiempos de respuesta prioritarios para resolver de inmediato cualquier eventualidad, como fallas en el inicio de sesión de los vendedores o problemas en el traspaso final del pedido (Handoff) al WhatsApp del agente de ventas.
+• Resguardos de Seguridad y Backups: Realizamos respaldos periódicos de tu lista de clientes registrados, las bitácoras históricas de ventas y el reporte de "Oportunidades Perdidas", resguardando la integridad de tus datos conforme a los accesos por roles.
+[Style: Heading2] Costos Operativos de Infraestructura
+Los costos asociados al uso activo del sistema son independientes al servicio de mantenimiento y pueden ser pagados de forma directa por el cliente o integrados en la administración técnica:
+• API de WhatsApp Business (Meta): Meta realiza un cobro directo por cada "conversación de 24 horas" iniciada por el bot o el cliente. Las tarifas son muy accesibles, oscilando aproximadamente entre $0.01 y $0.03 USD por cliente atendido.
+• API de Gemini (Inteligencia Artificial) y Servicios de Voz: Consumo directo basado en la cantidad de palabras de texto interpretadas (tokens) y los minutos de audio procesados para las notas de voz en alta definición.
+• Hosting de la Web y Dashboard: Alojamiento en servidores seguros de la nube (como AWS, DigitalOcean o Render) junto a la Base de Datos relacional para garantizar alta disponibilidad 24/7 (aproximadamente $25 USD al mes).
