@@ -212,6 +212,160 @@ app.post('/api/clients/:phone', async (req, res) => {
     res.json({ success });
 });
 
+// API: Obtener Estados Disponibles
+app.get('/api/states', async (req, res) => {
+    try {
+        if (availableStatesCache.length === 0) {
+            await refreshAvailableStates();
+        }
+        const states = availableStatesCache.map(s => s.original);
+        res.json(states);
+    } catch (error) {
+        console.error("Error en GET /api/states:", error);
+        res.status(500).json({ error: "Error al obtener la lista de estados" });
+    }
+});
+
+// API: Búsqueda Directa por Número de Parte
+app.post('/api/search/part', async (req, res) => {
+    const { query, state } = req.body;
+    if (!query || typeof query !== 'string' || !query.trim()) {
+        return res.status(400).json({ error: "Debe ingresar un término de búsqueda válido." });
+    }
+    
+    const trimmedQuery = query.trim();
+    const searchState = (state && state !== 'all') ? state : null;
+    
+    console.log(`[API BUSQUEDA PARTE] Buscando "${trimmedQuery}" en estado: "${searchState || 'GLOBAL/TODOS'}"`);
+    
+    try {
+        let results = await searchParts(trimmedQuery, searchState);
+        let isGlobal = false;
+        
+        // Si el usuario seleccionó un estado y no hay existencias locales, hacer búsqueda nacional (global)
+        if (searchState && (!results || results.length === 0)) {
+            console.log(`[API BUSQUEDA PARTE] Sin existencias en "${searchState}". Cascading a búsqueda nacional...`);
+            results = await searchParts(trimmedQuery, null);
+            isGlobal = true;
+        }
+        
+        res.json({ success: true, results: results || [], isGlobal });
+    } catch (error) {
+        console.error("Error en POST /api/search/part:", error);
+        res.status(500).json({ error: "Error interno al realizar la búsqueda por número de parte." });
+    }
+});
+
+// API: Búsqueda Inteligente por VIN o Motor
+app.post('/api/search/vin', async (req, res) => {
+    const { query, state } = req.body;
+    if (!query || typeof query !== 'string' || !query.trim()) {
+        return res.status(400).json({ error: "Debe ingresar un término de búsqueda válido (VIN o número de motor)." });
+    }
+    
+    const trimmedQuery = query.trim();
+    const searchState = (state && state !== 'all') ? state : null;
+    
+    console.log(`[API BUSQUEDA VIN] Iniciando consulta por VIN/Motor para "${trimmedQuery}" en estado: "${searchState || 'GLOBAL/TODOS'}"`);
+    
+    try {
+        // 1. Ejecutar el script de Python con el agente de IA
+        const pythonOutput = await runVinSearch(trimmedQuery);
+        let responseData;
+        try {
+            const trimmed = pythonOutput.trim();
+            const jsonStartIndex = trimmed.indexOf('{');
+            const jsonEndIndex = trimmed.lastIndexOf('}');
+            if (jsonStartIndex === -1 || jsonEndIndex === -1) {
+                throw new Error("No se encontró bloque JSON en la salida de Python");
+            }
+            const jsonStr = trimmed.substring(jsonStartIndex, jsonEndIndex + 1);
+            responseData = JSON.parse(jsonStr);
+        } catch (parseErr) {
+            console.error("Error al procesar JSON de Python:", parseErr);
+            return res.status(500).json({ error: "No pudimos procesar la respuesta de la IA. Inténtalo de nuevo." });
+        }
+        
+        if (!responseData || !responseData.success) {
+            return res.json({ success: false, error: responseData?.error || "Error en el agente de IA al interpretar el VIN." });
+        }
+        
+        // 2. Extraer candidatos a números de parte
+        let candidates = [];
+        if (responseData.numeros_parte) {
+            let rawCandidates = [];
+            if (Array.isArray(responseData.numeros_parte)) {
+                rawCandidates = responseData.numeros_parte.map(c => String(c).trim()).filter(Boolean);
+            } else {
+                rawCandidates = [String(responseData.numeros_parte).trim()].filter(Boolean);
+            }
+            // Limpieza ultra-robusta de candidatos
+            candidates = rawCandidates.map(c => {
+                return c.replace(/^["'\s.,:]+|["'\s.,:]+$/g, '').trim();
+            }).filter(Boolean);
+        }
+        
+        console.log(`[API BUSQUEDA VIN] Números de parte sugeridos por la IA:`, candidates);
+        
+        // 3. Buscar en Supabase por estado o global
+        let results = [];
+        for (const partNum of candidates) {
+            if (!partNum) continue;
+            const partsFound = await searchParts(partNum, searchState);
+            if (partsFound && partsFound.length > 0) {
+                results.push(...partsFound);
+            }
+        }
+        
+        // Eliminar duplicados
+        const seenParts = new Set();
+        results = results.filter(r => {
+            if (seenParts.has(r.part.part_number)) return false;
+            seenParts.add(r.part.part_number);
+            return true;
+        });
+        
+        let isGlobal = false;
+        
+        // 4. Si no se encontró en el estado, buscar en todo el país (global)
+        if (searchState && results.length === 0) {
+            console.log(`[API BUSQUEDA VIN] Sin existencias regionales. Iniciando búsqueda nacional...`);
+            let globalResults = [];
+            for (const partNum of candidates) {
+                if (!partNum) continue;
+                const partsFound = await searchParts(partNum, null);
+                if (partsFound && partsFound.length > 0) {
+                    globalResults.push(...partsFound);
+                }
+            }
+            
+            const seenGlobal = new Set();
+            globalResults = globalResults.filter(r => {
+                if (seenGlobal.has(r.part.part_number)) return false;
+                seenGlobal.add(r.part.part_number);
+                return true;
+            });
+            
+            if (globalResults.length > 0) {
+                results = globalResults;
+                isGlobal = true;
+            }
+        }
+        
+        res.json({
+            success: true,
+            respuesta_cliente: responseData.respuesta_cliente || "Hemos procesado tu consulta.",
+            vin: responseData.vin || responseData.motor || null,
+            results: results || [],
+            isGlobal
+        });
+    } catch (error) {
+        console.error("Error en POST /api/search/vin:", error);
+        res.status(500).json({ error: "Error interno en el servidor al realizar la búsqueda por VIN." });
+    }
+});
+
+
 // API: Descargar Excel de Ejemplo Dinámico
 app.get('/api/download-sample-excel', (req, res) => {
     const type = req.query.type || 'inventory';

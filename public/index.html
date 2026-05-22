@@ -182,7 +182,12 @@
 </head>
 <body>
 
-    <h1>Panel de Control Automotriz</h1>
+    <div style="width: 100%; max-width: 1000px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+        <h1 style="margin-bottom: 0; font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Panel de Control Automotriz</h1>
+        <a href="/buscar.html" style="text-decoration: none; display: flex; align-items: center; gap: 0.5rem; background: var(--accent); color: white; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: all 0.3s ease;" onmouseover="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent-hover'); this.style.transform='translateY(-2px)'" onmouseout="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent'); this.style.transform='translateY(0)'">
+            🔍 Buscador de Refacciones
+        </a>
+    </div>
 
     <!-- NUEVO PANEL DE SALUD DEL SISTEMA (META CLOUD API) -->
     <div class="glass-panel" style="width: 100%; max-width: 1000px; margin-bottom: 2rem; padding: 1.5rem 2rem;">

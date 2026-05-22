@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Refacciones | Inteligente</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --accent-blue: #3b82f6;
+            --accent-blue-hover: #2563eb;
+            --accent-green: #10b981;
+            --accent-green-hover: #059669;
+            --accent-amber: #f59e0b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --card-bg: rgba(15, 23, 42, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header-nav {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #60a5fa, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-nav {
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            padding: 0.75rem 1.5rem;
+            border-radius: 1rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .btn-nav:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .main-container {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            width: 100%;
+        }
+
+        .search-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .input-text {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 1rem;
+            padding: 1.25rem 1.5rem;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            outline: none;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .input-text:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .controls-row {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 1.5rem;
+            align-items: end;
+        }
+
+        @media (max-width: 768px) {
+            .controls-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .select-state {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 1rem;
+            padding: 1.25rem 1.5rem;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            outline: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1.5rem center;
+            background-size: 1.25rem;
+            padding-right: 3rem;
+        }
+
+        .select-state:focus {
+            border-color: var(--accent-blue);
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 576px) {
+            .buttons-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .btn-search {
+            border: none;
+            border-radius: 1rem;
+            padding: 1.25rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-search.part-btn {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, #1d4ed8 100%);
+        }
+
+        .btn-search.part-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, var(--accent-blue-hover) 0%, #1e40af 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -10px rgba(59, 130, 246, 0.5);
+        }
+
+        .btn-search.vin-btn {
+            background: linear-gradient(135deg, var(--accent-green) 0%, #047857 100%);
+        }
+
+        .btn-search.vin-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, var(--accent-green-hover) 0%, #065f46 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -10px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-search:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* LOADING SPINNER */
+        .loading-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            gap: 1.5rem;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .vin-loading .spinner {
+            border-top-color: var(--accent-green);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-main);
+            text-align: center;
+            max-width: 500px;
+            line-height: 1.5;
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        /* RESULTS SYSTEM */
+        .results-container {
+            display: none;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* IA Diagnostic Box */
+        .ai-card {
+            background: rgba(245, 158, 11, 0.05);
+            border: 1px dashed rgba(245, 158, 11, 0.3);
+            border-radius: 1.25rem;
+            padding: 1.75rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-amber);
+        }
+
+        .ai-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-amber);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .ai-body {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--text-main);
+            white-space: pre-line;
+        }
+
+        /* Part Result Cards */
+        .part-card {
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.25rem;
+            padding: 1.75rem;
+            transition: border-color 0.3s ease, transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .part-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .part-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .part-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .part-number-badge {
+            font-size: 0.85rem;
+            font-weight: 800;
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            padding: 0.3rem 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            width: fit-content;
+            letter-spacing: 0.05em;
+        }
+
+        .part-description {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-top: 0.25rem;
+        }
+
+        .part-price {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--accent-green);
+        }
+
+        /* Branch Inventory Table */
+        .inventory-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .inventory-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .branch-table-container {
+            overflow-x: auto;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .branch-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+            text-align: left;
+        }
+
+        .branch-table th, .branch-table td {
+            padding: 0.85rem 1.2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .branch-table th {
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .branch-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .stock-badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            border-radius: 0.5rem;
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        .stock-badge.in-stock {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .stock-badge.low-stock {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-whatsapp {
+            background: #25d366;
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-whatsapp:hover {
+            background: #20ba5a;
+            transform: scale(1.05);
+        }
+
+        /* BADGES */
+        .badge-global {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            font-size: 0.8rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        /* ALERT CARDS */
+        .alert-card {
+            background: rgba(239, 68, 68, 0.05);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 1.25rem;
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .alert-card-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #f87171;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-card-text {
+            color: var(--text-muted);
+            max-width: 500px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-nav">
+        <h1>🔍 Buscador de Refacciones</h1>
+        <a href="/index.html" class="btn-nav">
+            📊 Volver al Dashboard
+        </a>
+    </div>
+
+    <div class="main-container">
+        <div class="glass-panel">
+            <div class="search-wrapper">
+                <div class="form-group">
+                    <label for="searchQuery">¿Qué estás buscando?</label>
+                    <input type="text" id="searchQuery" class="input-text" placeholder="Escribe el número de parte (ej. 1R-1808) o describe con VIN (ej. filtros de motor C15 serie 2WS12345)...">
+                </div>
+
+                <div class="controls-row">
+                    <div class="form-group">
+                        <label for="stateSelector">Selecciona tu Región</label>
+                        <select id="stateSelector" class="select-state">
+                            <option value="all">📍 Búsqueda Nacional (Todas las sucursales)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <div class="buttons-grid">
+                            <button id="btnPartSearch" class="btn-search part-btn">
+                                ⚙️ Por No. de Parte
+                            </button>
+                            <button id="btnVinSearch" class="btn-search vin-btn">
+                                🚗 Por VIN o Motor
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LOADING STATE -->
+        <div id="loadingPanel" class="glass-panel loading-container">
+            <div class="spinner"></div>
+            <div id="loadingText" class="loading-text">Buscando existencias en el inventario...</div>
+        </div>
+
+        <!-- RESULTS SYSTEM -->
+        <div id="resultsPanel" class="results-container">
+            <!-- IA DIAGNOSTIC (DYNAMIC) -->
+            <div id="aiDiagnosticBox" class="ai-card" style="display: none;">
+                <div class="ai-title">🤖 Análisis de Compatibilidad del Asistente IA</div>
+                <div id="aiDiagnosticBody" class="ai-body">...</div>
+            </div>
+
+            <!-- COMPATIBLE BADGE FOR STATE FALLBACK -->
+            <div id="globalBadgeWrapper" style="display: none; width: 100%;">
+                <div class="badge-global">
+                    ✈️ Disponibilidad Foránea (Mostrando stock a nivel nacional por falta de inventario local)
+                </div>
+            </div>
+
+            <!-- LIST OF PART CARDS -->
+            <div id="partsList" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Dynamically loaded -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dynamic loading state messages for VIN search
+        const vinLoadingMessages = [
+            "🔍 Interpretando VIN/Motor con nuestro asistente de IA...",
+            "⚙️ Identificando especificaciones de tu motor y refacciones compatibles...",
+            "🌐 Consultando manuales técnicos en la web y base de conocimiento...",
+            "🏪 Buscando números de parte compatibles en nuestro inventario físico...",
+            "⏱️ Esto puede tardar hasta 40 segundos, estamos preparando una cotización completa...",
+            "📊 Consolidando existencias regionales y foráneas por sucursal..."
+        ];
+
+        let loadingInterval = null;
+
+        // Elements
+        const searchQueryInput = document.getElementById('searchQuery');
+        const stateSelector = document.getElementById('stateSelector');
+        const btnPartSearch = document.getElementById('btnPartSearch');
+        const btnVinSearch = document.getElementById('btnVinSearch');
+        const loadingPanel = document.getElementById('loadingPanel');
+        const loadingText = document.getElementById('loadingText');
+        const resultsPanel = document.getElementById('resultsPanel');
+        const aiDiagnosticBox = document.getElementById('aiDiagnosticBox');
+        const aiDiagnosticBody = document.getElementById('aiDiagnosticBody');
+        const globalBadgeWrapper = document.getElementById('globalBadgeWrapper');
+        const partsList = document.getElementById('partsList');
+
+        // Load states from DB on load
+        async function loadStates() {
+            try {
+                const response = await fetch('/api/states');
+                if (response.ok) {
+                    const states = await response.json();
+                    states.forEach(state => {
+                        const option = document.createElement('option');
+                        option.value = state;
+                        option.textContent = `📍 ${state}`;
+                        stateSelector.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.error("Error cargando estados:", err);
+            }
+        }
+
+        // Start spinning message loader
+        function startLoading(isVin) {
+            // Reset panels
+            resultsPanel.style.display = 'none';
+            aiDiagnosticBox.style.display = 'none';
+            globalBadgeWrapper.style.display = 'none';
+            partsList.innerHTML = '';
+            
+            // Show loader
+            loadingPanel.style.display = 'flex';
+            if (isVin) {
+                loadingPanel.classList.add('vin-loading');
+                let msgIndex = 0;
+                loadingText.textContent = vinLoadingMessages[0];
+                loadingInterval = setInterval(() => {
+                    msgIndex = (msgIndex + 1) % vinLoadingMessages.length;
+                    loadingText.textContent = vinLoadingMessages[msgIndex];
+                }, 6000);
+            } else {
+                loadingPanel.classList.remove('vin-loading');
+                loadingText.textContent = "🔍 Buscando pieza exacta en la base de datos de inventario...";
+            }
+
+            // Disable buttons
+            btnPartSearch.disabled = true;
+            btnVinSearch.disabled = true;
+            searchQueryInput.disabled = true;
+            stateSelector.disabled = true;
+        }
+
+        function stopLoading() {
+            clearInterval(loadingInterval);
+            loadingInterval = null;
+            loadingPanel.style.display = 'none';
+            
+            // Enable buttons
+            btnPartSearch.disabled = false;
+            btnVinSearch.disabled = false;
+            searchQueryInput.disabled = false;
+            stateSelector.disabled = false;
+        }
+
+        // Handle direct part search
+        async function executePartSearch() {
+            const query = searchQueryInput.value.trim();
+            if (!query) {
+                alert("Por favor, escribe el número de parte o descripción que deseas consultar.");
+                return;
+            }
+
+            startLoading(false);
+
+            try {
+                const response = await fetch('/api/search/part', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: query,
+                        state: stateSelector.value === 'all' ? null : stateSelector.value
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Error en la respuesta del servidor");
+                }
+
+                const data = await response.json();
+                renderResults(data);
+            } catch (err) {
+                console.error("Search error:", err);
+                renderError("Hubo un problema al conectar con el servidor. Por favor, inténtalo de nuevo.");
+            } finally {
+                stopLoading();
+            }
+        }
+
+        // Handle VIN/AI search
+        async function executeVinSearch() {
+            const query = searchQueryInput.value.trim();
+            if (!query) {
+                alert("Por favor, ingresa el VIN o número de serie de motor junto con lo que buscas.");
+                return;
+            }
+
+            startLoading(true);
+
+            try {
+                const response = await fetch('/api/search/vin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: query,
+                        state: stateSelector.value === 'all' ? null : stateSelector.value
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Error en la respuesta de la IA");
+                }
+
+                const data = await response.json();
+                renderResults(data);
+            } catch (err) {
+                console.error("VIN Search error:", err);
+                renderError("La búsqueda inteligente tomó demasiado tiempo o el servidor reportó un error. Por favor, simplifica tu consulta e intenta de nuevo.");
+            } finally {
+                stopLoading();
+            }
+        }
+
+        // Render standard error
+        function renderError(message) {
+            resultsPanel.style.display = 'flex';
+            partsList.innerHTML = `
+                <div class="alert-card">
+                    <div class="alert-card-title">⚠️ Error en la Búsqueda</div>
+                    <div class="alert-card-text">${message}</div>
+                </div>
+            `;
+        }
+
+        // Render search results
+        function renderResults(data) {
+            resultsPanel.style.display = 'flex';
+            
+            // Show AI diagnostic if returned
+            if (data.respuesta_cliente) {
+                aiDiagnosticBox.style.display = 'block';
+                aiDiagnosticBody.textContent = data.respuesta_cliente;
+            } else {
+                aiDiagnosticBox.style.display = 'none';
+            }
+
+            // Show global fallback badge
+            if (data.isGlobal) {
+                globalBadgeWrapper.style.display = 'block';
+            } else {
+                globalBadgeWrapper.style.display = 'none';
+            }
+
+            // Render list of parts
+            if (!data.results || data.results.length === 0) {
+                const stateText = stateSelector.value === 'all' ? 'nacional' : `en ${stateSelector.value} ni foráneas`;
+                partsList.innerHTML = `
+                    <div class="alert-card" style="background: rgba(245, 158, 11, 0.03); border-color: rgba(245, 158, 11, 0.15);">
+                        <div class="alert-card-title" style="color: var(--accent-amber);">⚠️ Sin Existencias Disponibles</div>
+                        <div class="alert-card-text">
+                            Lamentamos informarle que, por el momento, no contamos con existencias de esta pieza en nuestro inventario ${stateText}.
+                            <br><br>
+                            Intente buscar usando otra variante o verifique la ortografía del número de parte.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            data.results.forEach(item => {
+                const partCard = document.createElement('div');
+                partCard.className = 'part-card';
+
+                // Part Info Block
+                const formattedPrice = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(item.part.price);
+                
+                let partHeaderHtml = `
+                    <div class="part-header">
+                        <div class="part-info">
+                            <span class="part-number-badge">${item.part.part_number}</span>
+                            <h3 class="part-description">${item.part.description}</h3>
+                        </div>
+                        <div class="part-price">${formattedPrice}</div>
+                    </div>
+                `;
+
+                // Inventory Table Block
+                let invRowsHtml = '';
+                item.inventory.forEach(inv => {
+                    const stockClass = inv.stock > 5 ? 'in-stock' : 'low-stock';
+                    
+                    // Direct WhatsApp link
+                    const waText = encodeURIComponent(`Hola, vi en el buscador web que tienen la refacción ${item.part.description} (Parte: ${item.part.part_number}) con ${inv.stock} piezas disponibles en la Sucursal ${inv.branch_name}. Me gustaría cotizar.`);
+                    const waUrl = `https://wa.me/${inv.agent_phone}?text=${waText}`;
+
+                    invRowsHtml += `
+                        <tr>
+                            <td style="font-weight: 700; color: var(--text-main);">${inv.branch_name}</td>
+                            <td><span style="color: var(--text-muted); font-size: 0.85rem;">📍</span> ${inv.branch_state || ''}</td>
+                            <td><span class="stock-badge ${stockClass}">${inv.stock} pzas</span></td>
+                            <td style="font-size: 0.85rem; color: var(--text-muted); max-width: 250px;">${inv.branch_address || 'Dirección de la sucursal'}</td>
+                            <td style="text-align: right;">
+                                <a href="${waUrl}" target="_blank" class="btn-whatsapp">
+                                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.731-1.456L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.57 2.022 14.1 1 11.993 1 6.56 1 2.132 5.37 2.128 10.796c-.001 1.705.462 3.37 1.34 4.825l-.997 3.646 3.73-.966.002-.001-.004-.004zm11.789-6.611c-.322-.161-1.897-.937-2.193-1.042-.295-.104-.51-.157-.724.161-.215.318-.83.157-1.002.318-.171.161-.343.318-.515.525-.171.207-.343.424-.515.263-.263-.131-.83-.318-1.579-.986-.583-.52-1.003-1.185-1.117-1.393-.114-.207-.013-.319.092-.424.095-.095.215-.25.322-.373.108-.124.143-.207.215-.344.072-.136.036-.26-.017-.366-.053-.105-.48-1.156-.659-1.587-.174-.419-.348-.362-.48-.362h-.41c-.143 0-.376.053-.572.267-.197.214-.752.735-.752 1.791s.769 2.079.877 2.22c.108.141 1.513 2.311 3.666 3.242.512.221.912.353 1.222.451.514.163.982.14 1.352.085.412-.061 1.897-.777 2.162-1.488.266-.713.266-1.325.187-1.452-.079-.127-.295-.207-.617-.368z"/></svg>
+                                    Contactar Sucursal
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                let inventoryTableHtml = `
+                    <div class="inventory-section">
+                        <h4 class="inventory-title">🏪 Existencias en Sucursales</h4>
+                        <div class="branch-table-container">
+                            <table class="branch-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sucursal</th>
+                                        <th>Estado</th>
+                                        <th>Existencia</th>
+                                        <th>Dirección</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${invRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                partCard.innerHTML = partHeaderHtml + inventoryTableHtml;
+                partsList.appendChild(partCard);
+            });
+        }
+
+        // Event Listeners
+        btnPartSearch.addEventListener('click', executePartSearch);
+        btnVinSearch.addEventListener('click', executeVinSearch);
+
+        // Enter key in input triggers direct search
+        searchQueryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                executePartSearch();
+            }
+        });
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            loadStates();
+        });
+    </script>
+</body>
+</html>
