@@ -678,6 +678,49 @@ async function sendMetaMessage(phone, content, type = 'text', interactiveOptions
     }
 }
 
+async function sendOrderSummaryTicket(phone, user) {
+    const cart = userCarts[phone] || [];
+    if (cart.length === 0) {
+        await updateUser(phone, { step: 'asking_part' });
+        await sendMetaMessage(phone, "🛒 Tu carrito está vacío. Dime qué refacción deseas buscar:");
+        return;
+    }
+    
+    let ticket = `🛒 *RESUMEN DE TU PEDIDO* 🛒\n`;
+    ticket += `--------------------------------\n`;
+    let grandTotal = 0;
+    
+    cart.forEach((item, index) => {
+        const price = item.part.price ? parseFloat(item.part.price) : 0;
+        const totalItem = price * item.quantity;
+        grandTotal += totalItem;
+        ticket += `*${index + 1}.* ▪ *${item.quantity}x* ${item.part.description} (${item.part.part_number})\n`;
+        ticket += `   Precio: $${price.toFixed(2)} MXN | Total: *$${totalItem.toFixed(2)} MXN*\n`;
+        ticket += `   Sucursal: _${item.branch.branch_name}_\n\n`;
+    });
+    
+    ticket += `--------------------------------\n`;
+    ticket += `*Total a Pagar:* *$${grandTotal.toFixed(2)} MXN* _(IVA incluido)_\n\n`;
+    ticket += `👤 *Facturar a:* ${user.client_name}\n`;
+    ticket += `🔑 *No. Cliente:* ${user.client_number || 'Nuevo Registro'}\n`;
+    ticket += `📍 *Zona de Búsqueda:* ${user.current_state || 'Nacional'}\n`;
+    ticket += `--------------------------------\n`;
+    ticket += `¿Deseas confirmar tu pedido para enviarlo al vendedor o deseas realizar cambios?`;
+    
+    await sendMetaMessage(phone, null, 'interactive', {
+        type: "button",
+        body: { text: ticket },
+        action: {
+            buttons: [
+                { type: "reply", reply: { id: "CONFIRMAR_PEDIDO", title: "Confirmar Pedido [C]" } },
+                { type: "reply", reply: { id: "MODIFICAR_CARRITO", title: "Modificar [M]" } },
+                { type: "reply", reply: { id: "SEGUIR_COMPRANDO", title: "Seguir Comprando [O]" } }
+            ]
+        }
+    });
+    sendMetaVoiceNote(phone, `Aquí tienes el resumen de tu pedido por un total de ${grandTotal.toFixed(2)} pesos a nombre de ${user.client_name}. Por favor presiona Confirmar Pedido en pantalla para enviarlo a nuestros agentes de ventas, o presiona Modificar si deseas cambiar cantidades.`).catch(e => console.error("TTS error:", e));
+}
+
 // Helper: Transcribir Audio con OpenAI Whisper
 async function transcribeAudio(audioId) {
     if (!openai) {
@@ -873,7 +916,11 @@ async function sendStateOptionsList(phone, user, customText = null) {
     let bodyText = customText;
     if (!bodyText) {
         if (user && user.client_name) {
-            bodyText = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy?`;
+            if (user.client_number && user.client_number !== 'Nuevo Registro') {
+                bodyText = `¡Bienvenido de nuevo, *${user.client_name}*! (Cliente No. *${user.client_number}*) 🚗\n\n¿De qué *Estado de la República* nos contactas hoy?`;
+            } else {
+                bodyText = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗\n\n¿De qué *Estado de la República* nos contactas hoy?`;
+            }
         } else {
             bodyText = "¡Bienvenido al cotizador de refacciones! 🚗\n\n¿De qué *Estado de la República* nos contactas?";
         }
@@ -1057,10 +1104,17 @@ async function processMessageLogic(phone, text, senderName) {
 
     try {
         if (step === 'idle') {
+            let greeting = `¡Bienvenido al cotizador de refacciones! 🚗`;
+            if (user.client_name) {
+                if (user.client_number && user.client_number !== 'Nuevo Registro') {
+                    greeting = `¡Bienvenido de nuevo, *${user.client_name}*! (Cliente No. *${user.client_number}*) 🚗`;
+                } else {
+                    greeting = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗`;
+                }
+            }
+
             if (user.current_state) {
                 await updateUser(phone, { step: 'asking_part' });
-                let greeting = `¡Bienvenido al cotizador de refacciones! 🚗`;
-                if (user.client_name) greeting = `¡Bienvenido de nuevo, *${user.client_name}*! 🚗`;
                 greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nSi ya conoces el número de parte de la refacción que estás buscando, envíame un mensaje de voz o texto con la información.\n\nSi aun no estás seguro del número de parte que necesitas, escribe *AYUDA* y te apoyamos.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
                 await sendMetaMessage(phone, greeting);
                 sendMetaVoiceNote(phone, greeting).catch(e => console.error("TTS error:", e));
@@ -1068,7 +1122,7 @@ async function processMessageLogic(phone, text, senderName) {
                 const detectedState = detectStateFromPhone(phone);
                 if (detectedState) {
                     await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
-                    const msg = `¡Bienvenido al cotizador de refacciones! 🚗\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nSi ya conoces el número de parte de la refacción que estás buscando, envíame un mensaje de voz o texto con la información.\n\nSi aun no estás seguro del número de parte que necesitas, escribe *AYUDA* y te apoyamos.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`;
+                    const msg = `${greeting}\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nSi ya conoces el número de parte de la refacción que estás buscando, envíame un mensaje de voz o texto con la información.\n\nSi aun no estás seguro del número de parte que necesitas, escribe *AYUDA* y te apoyamos.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`;
                     await sendMetaMessage(phone, msg);
                     sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 } else {
@@ -1154,8 +1208,11 @@ async function processMessageLogic(phone, text, senderName) {
             const normalizedText = spokenIntent || text.toUpperCase().trim();
 
             if ((normalizedText === 'FINALIZAR' || normalizedText === 'F') && userCarts[phone] && userCarts[phone].length > 0) {
-                if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
-                else {
+                if (user.client_name) {
+                    await updateUser(phone, { step: 'confirming_order' });
+                    const updatedUser = await getUser(phone);
+                    await sendOrderSummaryTicket(phone, updatedUser);
+                } else {
                     await updateUser(phone, { step: 'asking_name' });
                     const msg = "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?";
                     await sendMetaMessage(phone, msg);
@@ -1769,8 +1826,11 @@ async function processMessageLogic(phone, text, senderName) {
             
             if ((normalizedText === 'FINALIZAR' || normalizedText === 'F') && userCarts[phone] && userCarts[phone].length > 0) {
                 delete userSearchSessions[phone];
-                if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
-                else {
+                if (user.client_name) {
+                    await updateUser(phone, { step: 'confirming_order' });
+                    const updatedUser = await getUser(phone);
+                    await sendOrderSummaryTicket(phone, updatedUser);
+                } else {
                     await updateUser(phone, { step: 'asking_name' });
                     await sendMetaMessage(phone, "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?");
                 }
@@ -1895,8 +1955,11 @@ async function processMessageLogic(phone, text, senderName) {
             if ((normalizedText === 'FINALIZAR' || normalizedText === 'F') && userCarts[phone] && userCarts[phone].length > 0) {
                 delete userSearchSessions[phone];
                 delete userPendingItems[phone];
-                if (user.client_name && user.client_number) await processOrder(phone, user.client_name, user.client_number, user.current_state);
-                else {
+                if (user.client_name) {
+                    await updateUser(phone, { step: 'confirming_order' });
+                    const updatedUser = await getUser(phone);
+                    await sendOrderSummaryTicket(phone, updatedUser);
+                } else {
                     await updateUser(phone, { step: 'asking_name' });
                     const msg = "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?";
                     await sendMetaMessage(phone, msg);
@@ -2028,8 +2091,10 @@ async function processMessageLogic(phone, text, senderName) {
                 sendMetaVoiceNote(phone, "Entendido. Dime qué otra refacción buscas:").catch(e => console.error("TTS error:", e));
             } else if (res === 'NO' || res === 'N' || res === 'FINALIZAR' || res === 'F' || res === 'FINALIZAR F') {
                 delete userSearchSessions[phone]; // Clean up the session
-                if (user.client_name && user.client_number) {
-                    await processOrder(phone, user.client_name, user.client_number, user.current_state);
+                if (user.client_name) {
+                    await updateUser(phone, { step: 'confirming_order' });
+                    const updatedUser = await getUser(phone);
+                    await sendOrderSummaryTicket(phone, updatedUser);
                 } else {
                     await updateUser(phone, { step: 'asking_name' });
                     const msg = "Para tu cotización y facturación:\n\n¿A nombre de qué *persona o empresa* se hará la factura?";
@@ -2051,7 +2116,147 @@ async function processMessageLogic(phone, text, senderName) {
         else if (step === 'asking_name') {
             const clientName = text;
             await updateUser(phone, { client_name: clientName });
-            await processOrder(phone, clientName, 'Nuevo Registro', user.current_state);
+            await updateUser(phone, { step: 'confirming_order' });
+            const updatedUser = await getUser(phone);
+            await sendOrderSummaryTicket(phone, updatedUser);
+        }
+        else if (step === 'confirming_order') {
+            const buttonId = text.trim().toUpperCase();
+            
+            if (buttonId === 'CONFIRMAR_PEDIDO' || buttonId === 'CONFIRMAR' || buttonId === 'C') {
+                await processOrder(phone, user.client_name, user.client_number || 'Nuevo Registro', user.current_state);
+            } 
+            else if (buttonId === 'MODIFICAR_CARRITO' || buttonId === 'MODIFICAR' || buttonId === 'M') {
+                const cart = userCarts[phone] || [];
+                if (cart.length === 0) {
+                    await updateUser(phone, { step: 'asking_part' });
+                    await sendMetaMessage(phone, "🛒 Tu carrito está vacío. Dime qué refacción deseas buscar:");
+                    return;
+                }
+                
+                await updateUser(phone, { step: 'modifying_cart_select_item' });
+                
+                let msg = `🛠️ *MODIFICAR PIEZAS DEL CARRITO* 🛠️\n\n`;
+                msg += `Escribe el *número* del artículo que deseas modificar o eliminar:\n\n`;
+                cart.forEach((item, index) => {
+                    msg += `*${index + 1}.* ${item.quantity}x ${item.part.description} (${item.part.part_number}) - Sucursal: ${item.branch.branch_name}\n`;
+                });
+                msg += `\n👉 Escribe el número del artículo (ej. *1*) o escribe *REGRESAR* para volver al resumen del pedido.`;
+                
+                await sendMetaMessage(phone, msg);
+                sendMetaVoiceNote(phone, "Por favor escribe el número del artículo que deseas modificar de la lista en pantalla, o escribe REGRESAR para volver.").catch(e => console.error("TTS error:", e));
+            } 
+            else if (buttonId === 'SEGUIR_COMPRANDO' || buttonId === 'SEGUIR' || buttonId === 'O') {
+                await updateUser(phone, { step: 'asking_part' });
+                await sendMetaMessage(phone, "👍 Excelente. Dime qué *otra refacción* deseas buscar para agregar al carrito:");
+                sendMetaVoiceNote(phone, "Excelente. Dime qué otra refacción deseas buscar para agregar al carrito.").catch(e => console.error("TTS error:", e));
+            } 
+            else if (buttonId === 'VACIAR' || buttonId === 'V') {
+                delete userCarts[phone];
+                delete userVins[phone];
+                await updateUser(phone, { step: 'asking_part' });
+                const msg = "🗑️ Carrito vaciado correctamente.\n\nDime qué refacción deseas buscar ahora:";
+                await sendMetaMessage(phone, msg);
+                sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
+            }
+            else {
+                await sendMetaMessage(phone, "⚠️ Opción no válida. Por favor selecciona una de las opciones en pantalla:\n\n- *Confirmar Pedido* para enviar al vendedor.\n- *Modificar* para cambiar cantidades.\n- *Seguir Comprando* para añadir más refacciones.\n\nO escribe *REGRESAR* para ver el resumen de nuevo.");
+            }
+        }
+        else if (step === 'modifying_cart_select_item') {
+            const cleanText = text.trim().toUpperCase();
+            if (cleanText === 'REGRESAR' || cleanText === 'CANCELAR' || cleanText === 'R') {
+                await updateUser(phone, { step: 'confirming_order' });
+                await sendOrderSummaryTicket(phone, user);
+                return;
+            }
+            
+            const selectedIdx = parseSpokenNumber(text);
+            const cart = userCarts[phone] || [];
+            
+            if (isNaN(selectedIdx) || selectedIdx <= 0 || selectedIdx > cart.length) {
+                await sendMetaMessage(phone, `⚠️ Selección no válida. Por favor ingresa el número de artículo correspondiente (del 1 al ${cart.length}) o escribe *REGRESAR*:`);
+                return;
+            }
+            
+            const itemToMod = cart[selectedIdx - 1];
+            userSearchSessions[phone] = { ...userSearchSessions[phone], modifyingIndex: selectedIdx - 1 };
+            
+            await updateUser(phone, { step: 'modifying_cart_input_quantity' });
+            
+            const msg = `✏️ *Modificando:* ${itemToMod.part.description} (${itemToMod.part.part_number})\n`;
+            msg += `Sucursal: ${itemToMod.branch.branch_name} | Stock disponible: ${itemToMod.branch.stock}\n`;
+            msg += `Cantidad actual: *${itemToMod.quantity}*\n\n`;
+            msg += `👉 Ingresa la *nueva cantidad* que deseas (ej. *3*).\n`;
+            msg += `💡 _Escribe *0* si deseas eliminar por completo esta pieza del carrito._`;
+            
+            await sendMetaMessage(phone, msg);
+            sendMetaVoiceNote(phone, `Ingresa la nueva cantidad que deseas para esta pieza, o escribe cero si deseas eliminarla por completo.`).catch(e => console.error("TTS error:", e));
+        }
+        else if (step === 'modifying_cart_input_quantity') {
+            const cleanText = text.trim().toUpperCase();
+            if (cleanText === 'CANCELAR' || cleanText === 'REGRESAR' || cleanText === 'R') {
+                await updateUser(phone, { step: 'confirming_order' });
+                await sendOrderSummaryTicket(phone, user);
+                return;
+            }
+            
+            const newQty = parseSpokenNumber(text);
+            if (isNaN(newQty) || newQty < 0) {
+                await sendMetaMessage(phone, "⚠️ Por favor ingresa una cantidad numérica válida (0 o mayor):");
+                return;
+            }
+            
+            const session = userSearchSessions[phone];
+            const modIdx = session ? session.modifyingIndex : -1;
+            const cart = userCarts[phone] || [];
+            
+            if (modIdx === -1 || modIdx === undefined || !cart[modIdx]) {
+                await updateUser(phone, { step: 'confirming_order' });
+                await sendMetaMessage(phone, "⚠️ Ocurrió un error al identificar el artículo. Regresando al resumen de pedido...");
+                await sendOrderSummaryTicket(phone, user);
+                return;
+            }
+            
+            const item = cart[modIdx];
+            
+            if (newQty === 0) {
+                cart.splice(modIdx, 1);
+                await sendMetaMessage(phone, `🗑️ Se ha eliminado *${item.part.description}* de tu pedido.`);
+                
+                if (cart.length === 0) {
+                    await updateUser(phone, { step: 'asking_part' });
+                    await sendMetaMessage(phone, "🛒 Tu carrito ahora está vacío. Dime qué refacción deseas buscar:");
+                } else {
+                    await updateUser(phone, { step: 'confirming_order' });
+                    await sendOrderSummaryTicket(phone, user);
+                }
+            } else {
+                await sendMetaMessage(phone, "⏱️ Verificando inventario...");
+                const { data: invRecord, error: invErr } = await supabase
+                    .from('inventory')
+                    .select('stock')
+                    .eq('branch_id', item.branch.branch_id)
+                    .eq('part_number', item.part.part_number)
+                    .maybeSingle();
+                
+                if (invErr) {
+                    console.error("Error consultando inventario:", invErr);
+                }
+                
+                const realStock = invRecord ? invRecord.stock : item.branch.stock;
+                item.branch.stock = realStock;
+                
+                if (newQty > realStock) {
+                    await sendMetaMessage(phone, `⚠️ Lo sentimos, solo tenemos *${realStock}* pieza(s) disponible(s) de este artículo en esta sucursal.\n\nPor favor ingresa una cantidad menor o igual a ${realStock}, o escribe *0* para eliminarlo:`);
+                    return;
+                }
+                
+                item.quantity = newQty;
+                await sendMetaMessage(phone, `✅ Cantidad actualizada a *${newQty}* pieza(s) con éxito.`);
+                await updateUser(phone, { step: 'confirming_order' });
+                await sendOrderSummaryTicket(phone, user);
+            }
         }
     } catch (error) {
         console.error("Error procesando mensaje:", error);
