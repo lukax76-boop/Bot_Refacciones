@@ -1,0 +1,90 @@
+🤖 SISTEMA DE COTIZACIONES Y BUSCADOR DE REFACCIONES
+Manual de Usuario y Guía de Operación Completa
+Un sistema inteligente diseñado para simplificar la consulta de inventarios, automatizar ventas e interconectar a clientes con agentes comerciales en tiempo real mediante WhatsApp y la Web.
+Dirigido a: Usuarios finales, agentes de venta y personal operativo (No técnico).
+Tecnología principal: WhatsApp Business API, Inteligencia Artificial Gemini y Panel Web.
+Última actualización: Mayo 2026
+[Style: Heading1] 1. INTRODUCCIÓN GENERAL AL SISTEMA
+¡Bienvenido al sistema inteligente de cotizaciones de refacciones! Este ecosistema tecnológico fue creado con un propósito muy sencillo: hacer que la búsqueda y venta de refacciones de tu negocio sea tan fácil como mandar un mensaje de WhatsApp.
+Tradicionalmente, un cliente que necesita una refacción específica debe llamar por teléfono, esperar en línea a ser atendido, o buscar largos catálogos numéricos en un sistema complejo. Este proyecto elimina esa fricción conectando tres piezas clave:
+[Style: Heading2] 📱 El Asistente de WhatsApp (Bot)
+Un bot automático que atiende a tus clientes las 24 horas del día. Recibe textos, números de parte e incluso notas de voz, consulta las existencias en tiempo real y les entrega un resumen listo para confirmar.
+[Style: Heading2] 🔍 El Buscador Web Interactivo
+Una página web de consulta rápida para clientes y personal de mostrador. Cuenta con dos botones: uno para buscar piezas idénticas y otro que usa Inteligencia Artificial para descifrar motores y VINs sin conocer los códigos técnicos.
+[Style: Heading2] 📊 El Panel de Control (Dashboard)
+El centro de mando para ti y tu equipo de administración. Aquí se configuran los accesos de seguridad, se analizan las ventas, se descargan reportes de &apos;Oportunidades Perdidas&apos; (piezas solicitadas no encontradas) y se carga inventario en segundos vía Excel.
+[Style: Heading1] 2. LA INTELIGENCIA ARTIFICIAL A TU SERVICIO
+Muchos sistemas tradicionales fallan porque exigen que el usuario escriba el código exacto de la refacción (por ejemplo: &apos;1R-1808&apos;). Si se escribe &apos;filtro 1r1808&apos; o se equivoca en una letra, la búsqueda tradicional dice que no existe.
+Nuestro sistema implementa una tecnología moderna llamada Inteligencia Artificial (IA) a través del modelo Gemini. A continuación, te explicamos cómo te beneficia de manera muy sencilla:
+[Style: Heading3] 🧠 Comprensión Humana (No sólo códigos):
+La IA actúa como un técnico con años de experiencia en el mostrador. Si el cliente escribe &apos;necesito los filtros para un motor Caterpillar C15 con número de serie de motor 2WS&apos;, la IA comprende el contexto, descifra el modelo de motor y deduce que el cliente requiere filtros de aceite y combustible específicos.
+[Style: Heading3] 🎙️ Audios a Texto (Notas de Voz):
+Sabemos que en el mundo de las refacciones es mucho más cómodo enviar un audio mientras se trabaja en el taller. El bot de WhatsApp cuenta con un transcriptor de voz que convierte las notas de voz en texto claro y procesable para el sistema.
+[Style: Heading3] 🎤 Notas de Voz del Bot (TTS):
+Para hacer la conversación más humana y premium, cada respuesta que da el bot (bienvenidas, listas de sucursales o confirmación de pedidos) va acompañada de un audio de voz de alta definición. El bot &apos;habla&apos; con el cliente con una voz amigable.
+[Style: Heading1] 3. MANUAL DEL BOT DE WHATSAPP: EL CAMINO DEL CLIENTE
+[Style: Heading2] Paso 1: Saludo y Detección de Ubicación
+Cuando el cliente escribe por primera vez (ej. &apos;Hola&apos;), el bot analiza los primeros dígitos de su número telefónico (LADA). Si pertenece a un estado donde tienes sucursales (ej. Nuevo León), lo reconoce automáticamente y lo saluda por su nombre de facturación (si es un cliente frecuente) dándole la bienvenida directamente en su región. Si el bot no puede deducir el estado o el cliente envía la palabra &apos;ESTADO&apos;, se le despliega un menú táctil interactivo con botones para que pulse su estado en pantalla.
+[Style: Heading2] Paso 2: Búsqueda de Refacciones (Texto o Voz)
+El bot le pide escribir o enviar un audio con lo que busca. El sistema buscará en el inventario exclusivo del estado detectado.
+[Style: Heading2] Paso 3: Elección de Sucursal con Botones Táctiles
+Si hay inventario en ese estado, el bot despliega los resultados mostrando el precio y la cantidad disponible en cada sucursal física. Envía botones interactivos en pantalla para que el cliente seleccione la sucursal de su preferencia.
+[Style: Heading2] Paso 4: Cantidad de Refacciones
+El bot le preguntará cuántas piezas requiere de ese artículo. El sistema valida en tiempo real que la sucursal tenga stock suficiente. Si el cliente pide más de lo disponible, el bot le avisa amablemente del límite físico y le pide corregir la cifra.
+[Style: Heading1] 3. MANUAL DEL BOT DE WHATSAPP: CONFIRMACIÓN Y VENTA
+[Style: Heading2] Paso 5: Seguir Comprando o Modificar Carrito
+El bot pregunta si desea agregar más artículos al carrito de compra. Si decide modificar, el bot despliega una lista de su compra para que cambie la cantidad o elimine piezas ingresando el número cero.
+[Style: Heading2] Paso 6: Ticket Digital e Identificación Completa
+Antes de mandar el pedido al vendedor, el bot genera un &apos;Ticket Resumen&apos; interactivo y detallado en pantalla con:
+• Lista de refacciones pedidas, sus precios, cantidades y subtotal.
+• Total con IVA incluido.
+• Datos fiscales del cliente (Nombre de facturación y número de cliente).
+• Sucursal y estado físico donde se realiza la compra.
+El bot solicita al cliente pulsar el botón &apos;[ C ] Confirmar Pedido&apos; para completar la venta.
+[Style: Heading2] Paso 7: Envío del Pedido al Vendedor (Handoff)
+Al confirmar, el bot hace magia: genera de inmediato un mensaje directo al vendedor encargado de esa sucursal en específico, adjuntando la orden completa, el enlace directo del WhatsApp del cliente para que lo contacte y sus datos comerciales completos (Nombre y Número de Cliente) para facilitar la facturación inmediata. De esta forma, el vendedor solo tiene que pulsar para cerrar el trato y programar el cobro/envío.
+[Style: Heading1] 4. EL BUSCADOR WEB INTERACTIVO
+[Style: Heading2] A. Selector de Estado Regional
+Un dropdown estético arriba del buscador cargado en tiempo real. Le permite filtrar el stock de refacciones de una región específica (ej. Coahuila, Yucatán) o seleccionar &apos;Buscar en Todo el País&apos; para una cobertura global de inventario.
+[Style: Heading2] B. Un Único Campo de Búsqueda de Refacciones
+El cliente o empleado escribe lo que busca en un solo cuadro interactivo gigante. Puede ser algo tan simple como &apos;6849N&apos; o algo descriptivo como &apos;batería para motor Caterpillar C15 serie 2WS&apos;.
+[Style: Heading2] C. Botón 1: &apos;⚙️ Por No. de Parte&apos; (Búsqueda Directa)
+Este botón busca coincidencias exactas y parciales en el catálogo oficial de refacciones (ej. coincidencias directas con el código &apos;6849N&apos;). Es rápido, preciso e ideal para cuando se tiene el código de la pieza en mano.
+[Style: Heading2] D. Botón 2: &apos;🚗 Por VIN o Motor&apos; (Búsqueda Inteligente)
+Ejecuta la Inteligencia Artificial del sistema para interpretar marcas, números VIN o series complejas de motor. Desmenuza la solicitud y busca existencias cruzadas en la base de datos nacional.
+[Style: Heading2] E. Enlace Directo a WhatsApp Comercial
+Los resultados se muestran en línea con el precio, descripción y las sucursales con existencias físicas. Al lado de cada sucursal aparece un botón interactivo de WhatsApp que, al pulsarlo, abre una conversación directa con el vendedor de esa sucursal, llevando un mensaje precargado con el número de parte para que no deba escribir nada más.
+[Style: Heading1] 5. EL PANEL DE CONTROL (DASHBOARD) - PARTE I
+[Style: Heading2] 1. Tarjetas de Estadísticas Principales
+Ubicadas al inicio del panel con luces de neón semitransparentes:
+• Búsquedas Totales: Cuántas consultas se han realizado en el sistema.
+• Ventas por Estado: Pedidos exitosos acumulados.
+• Oportunidades Perdidas: Búsquedas que no tuvieron existencias.
+[Style: Heading2] 2. Tabla de Oportunidades Perdidas por Estado
+Muestra en tiempo real las últimas 100 búsquedas en las que el bot no encontró piezas en el estado del cliente. Esta información es crucial para el área de Compras, ya que les indica exactamente qué piezas están demandando los clientes en cada región pero no tenemos en almacén. Cuenta con un botón para exportar a un reporte de Excel (CSV).
+[Style: Heading2] 3. Tabla de Ventas por Estado
+Presenta de forma lineal las últimas 100 ventas concretadas a través del bot, detallando la fecha exacta, el estado geográfico, la descripción de la refacción y la sucursal física responsable de surtir el pedido. También es exportable a Excel (CSV).
+[Style: Heading2] 4. Tabla de Gestión de Clientes Registrados
+Muestra una bitácora interactiva de los últimos 100 clientes que han chateado con el bot, ordenados de forma descendente del más reciente al más antiguo. Permite ver su teléfono real y su nombre, e incluye un campo interactivo para que los vendedores escriban el número de cliente oficial del ERP administrativo y lo guarden en el perfil digital en un clic.
+[Style: Heading1] 5. EL PANEL DE CONTROL (DASHBOARD) - PARTE II
+[Style: Heading2] 5. Control de Acceso y Roles de Seguridad
+Para garantizar la confidencialidad de la información comercial, el dashboard cuenta con un login seguro y tres perfiles o roles con privilegios diferenciados:
+🔑 Rol de Administrador: Acceso completo a todas las métricas, administración de usuarios, edición de números de clientes e importación masiva de inventarios.
+💼 Rol de Vendedor: Permiso de lectura de métricas y modificación de números de cliente en mostrador, así como carga de Excel, pero no puede crear ni borrar otros usuarios.
+👁️ Rol de Visualizador: Cuenta con perfil de sólo lectura. Puede observar las tablas de ventas, clientes y oportunidades perdidas, pero tiene estrictamente bloqueadas las opciones de importar inventarios mediante Excel y guardar datos.
+[Style: Heading2] 6. Módulo de Administración de Usuarios
+Exclusivo para el Administrador mediante el botón &apos;⚙️ Administrar Usuarios&apos; en la barra superior. Abre una ventana de doble columna:
+• Columna Izquierda: Formulario intuitivo de Alta Rápida para registrar nombres de usuarios con contraseñas seguras y asignación de rol en un clic.
+• Columna Derecha: Listado de usuarios activos en tiempo real con dropdowns integrados para ascender/descender de rol, restablecer contraseñas de forma segura e inmediata (icono de llave) y dar de baja o eliminar cuentas (icono de basurera).
+• Protección Antierrores: El sistema autodetecta al administrador activo e impide que pueda degradarse de rol o autoeliminarse por accidente.
+[Style: Heading2] 7. Carga Masiva de Inventario (Excel drag &amp; drop)
+Un panel interactivo para subir catálogos completos en segundos. Permite importar refacciones, sucursales físicas y niveles de stock de manera integrada arrastrando plantillas de Excel.
+[Style: Heading1] 6. CONSEJOS PRÁCTICOS PARA EL ÉXITO
+[Style: Heading3] 📈 Mantén tu Inventario al Día:
+Dedica unos minutos del inicio de semana para exportar tu inventario del sistema ERP a Excel y súbelo al dashboard usando el panel de Carga Masiva. Esto garantiza que el bot cotice precios y existencias reales, evitando malas experiencias de clientes.
+[Style: Heading3] 📝 Vincula los Números de Clientes:
+Pide a tus vendedores que cuando el bot les envíe una confirmación de venta de un cliente con la etiqueta &apos;Nuevo Registro&apos;, busquen el teléfono en su base de datos de facturación física e ingresen su número oficial en la tabla de &apos;Gestión de Clientes&apos;. Así, el próximo pedido llegará pre-etiquetado con su código.
+[Style: Heading3] 🔍 Revisa el Reporte de Oportunidades Perdidas:
+Utiliza el botón &apos;Descargar CSV&apos; en la tabla de Oportunidades Perdidas cada quincena. Es un estudio de mercado gratuito que te dice qué refacciones buscan los clientes en cada estado que no tienes en stock, permitiéndote comprar piezas de alta demanda antes que la competencia.
+[Style: Heading3] 🛡️ Protege tus Credenciales:
+Evita asignar roles de Administrador a personal temporal. El rol de Visualizador es perfecto para directores generales o personal que solo desea monitorear la salud comercial sin alterar los inventarios.
