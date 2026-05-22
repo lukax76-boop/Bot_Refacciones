@@ -517,9 +517,14 @@
 
     <div class="header-nav">
         <h1>🔍 Buscador de Refacciones</h1>
-        <a href="/index.html" class="btn-nav">
-            📊 Volver al Dashboard
-        </a>
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <a href="/index.html" class="btn-nav">
+                📊 Volver al Dashboard
+            </a>
+            <button onclick="handleLogout()" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.5rem;" onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'; this.style.transform='translateY(0)'">
+                🚪 Cerrar Sesión
+            </button>
+        </div>
     </div>
 
     <div class="main-container">
@@ -865,6 +870,27 @@
         window.addEventListener('DOMContentLoaded', () => {
             loadStates();
         });
+
+        async function handleLogout() {
+            if (confirm('¿Está seguro de que desea cerrar la sesión?')) {
+                try {
+                    const response = await fetch('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    if (response.ok) {
+                        window.location.href = '/login.html';
+                    } else {
+                        alert('Error al cerrar sesión.');
+                    }
+                } catch (err) {
+                    console.error("Logout error:", err);
+                    alert('Error de red al cerrar sesión.');
+                }
+            }
+        }
     </script>
 </body>
 </html>

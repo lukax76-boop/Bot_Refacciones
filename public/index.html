@@ -184,9 +184,14 @@
 
     <div style="width: 100%; max-width: 1000px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
         <h1 style="margin-bottom: 0; font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Panel de Control Automotriz</h1>
-        <a href="/buscar.html" style="text-decoration: none; display: flex; align-items: center; gap: 0.5rem; background: var(--accent); color: white; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: all 0.3s ease;" onmouseover="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent-hover'); this.style.transform='translateY(-2px)'" onmouseout="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent'); this.style.transform='translateY(0)'">
-            🔍 Buscador de Refacciones
-        </a>
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <a href="/api/allow-search" style="text-decoration: none; display: flex; align-items: center; gap: 0.5rem; background: var(--accent); color: white; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: all 0.3s ease;" onmouseover="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent-hover'); this.style.transform='translateY(-2px)'" onmouseout="this.style.background=window.getComputedStyle(document.documentElement).getPropertyValue('--accent'); this.style.transform='translateY(0)'">
+                🔍 Buscador de Refacciones
+            </a>
+            <button onclick="handleLogout()" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem 1.5rem; border-radius: 1rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.5rem;" onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'; this.style.transform='translateY(0)'">
+                🚪 Cerrar Sesión
+            </button>
+        </div>
     </div>
 
     <!-- NUEVO PANEL DE SALUD DEL SISTEMA (META CLOUD API) -->
@@ -619,6 +624,27 @@
             downloadLink.style.display = "none";
             document.body.appendChild(downloadLink);
             downloadLink.click();
+        }
+
+        async function handleLogout() {
+            if (confirm('¿Está seguro de que desea cerrar la sesión?')) {
+                try {
+                    const response = await fetch('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    if (response.ok) {
+                        window.location.href = '/login.html';
+                    } else {
+                        alert('Error al cerrar sesión.');
+                    }
+                } catch (err) {
+                    console.error("Logout error:", err);
+                    alert('Error de red al cerrar sesión.');
+                }
+            }
         }
     </script>
 </body>

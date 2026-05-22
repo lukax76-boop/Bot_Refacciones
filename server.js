@@ -11,11 +11,155 @@ const { supabase, getUser, updateUser, searchParts, logAnalytics, getStats, getC
 // 1. CONFIGURACIÓN DEL SERVIDOR WEB (DASHBOARD)
 // ==========================================
 const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: 'uploads/' });
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+// ==========================================
+// 1.5. AUTENTICACIÓN Y SEGURIDAD DEL DASHBOARD
+// ==========================================
+
+// Almacenamiento de sesiones en memoria
+const activeSessions = {};
+
+// Helper: Parsear cookies manual
+function parseCookies(req) {
+    const list = {};
+    const cookieHeader = req.headers.cookie;
+    if (!cookieHeader) return list;
+    cookieHeader.split(';').forEach(cookie => {
+        const parts = cookie.split('=');
+        if (parts.length >= 2) {
+            const name = parts[0].trim();
+            const val = parts.slice(1).join('=').trim();
+            if (name) {
+                list[name] = decodeURIComponent(val);
+            }
+        }
+    });
+    return list;
+}
+
+// Middleware: Requerir Autenticación
+function requireAuth(req, res, next) {
+    const cookies = parseCookies(req);
+    const token = cookies.session_token;
+    
+    if (token && activeSessions[token]) {
+        const session = activeSessions[token];
+        // Verificar si no ha expirado
+        if (Date.now() < session.expires) {
+            // Renovar expiración por 24 horas
+            session.expires = Date.now() + 24 * 60 * 60 * 1000;
+            req.session = session;
+            return next();
+        } else {
+            // Limpiar expirado
+            delete activeSessions[token];
+        }
+    }
+    
+    // Si es un API o petición asíncrona
+    if (req.xhr || req.headers.accept?.includes('json') || req.path.startsWith('/api/')) {
+        return res.status(401).json({ error: "No autorizado. Inicie sesión." });
+    }
+    
+    res.redirect('/login.html');
+}
+
+// Middleware: Control de acceso a buscar.html
+function allowedSearchMiddleware(req, res, next) {
+    const session = req.session;
+    if (session && (session.allowedSearch === true || session.allowedSearch === 'active')) {
+        // Establecer a 'active' para permitir refrescos (F5)
+        session.allowedSearch = 'active';
+        return next();
+    }
+    // Si no está permitido, redirigir al dashboard
+    res.redirect('/');
+}
+
+// Proteger todos los endpoints /api excepto login/logout
+app.use('/api', (req, res, next) => {
+    if (req.path === '/login' || req.path === '/logout') {
+        return next();
+    }
+    requireAuth(req, res, next);
+});
+
+// Transición segura: Dashboard -> Buscar
+app.get('/api/allow-search', (req, res) => {
+    if (req.session) {
+        req.session.allowedSearch = true;
+    }
+    res.redirect('/buscar.html');
+});
+
+// Endpoint: Iniciar Sesión (Login)
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    const adminUser = process.env.DASHBOARD_USER || 'admin';
+    const adminPass = process.env.DASHBOARD_PASS || 'admin123';
+    
+    if (username === adminUser && password === adminPass) {
+        const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        // Expiración en 24 horas
+        activeSessions[token] = {
+            username: username,
+            expires: Date.now() + 24 * 60 * 60 * 1000,
+            allowedSearch: false
+        };
+        
+        // Establecer cookie
+        res.setHeader('Set-Cookie', `session_token=${token}; Path=/; HttpOnly; Max-Age=${24 * 60 * 60}; SameSite=Lax`);
+        return res.json({ success: true });
+    }
+    
+    res.status(400).json({ error: "Usuario o contraseña incorrectos." });
+});
+
+// Endpoint: Cerrar Sesión (Logout)
+app.post('/api/logout', (req, res) => {
+    const cookies = parseCookies(req);
+    const token = cookies.session_token;
+    if (token) {
+        delete activeSessions[token];
+    }
+    res.setHeader('Set-Cookie', 'session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly');
+    res.json({ success: true });
+});
+
+// Rutas de Archivos HTML Protegidos (definidas ANTES de express.static)
+app.get('/login.html', (req, res) => {
+    const file = path.resolve(__dirname, 'public', 'login.html');
+    console.log(`[ROUTE /login.html] file=${file} exists=${fs.existsSync(file)}`);
+    res.sendFile(file, { dotfiles: 'allow' });
+});
+
+app.get('/', requireAuth, (req, res) => {
+    // Resetear acceso al buscador al entrar al dashboard
+    if (req.session) {
+        req.session.allowedSearch = false;
+    }
+    const file = path.resolve(__dirname, 'public', 'index.html');
+    console.log(`[ROUTE /] file=${file} exists=${fs.existsSync(file)}`);
+    res.sendFile(file, { dotfiles: 'allow' });
+});
+
+app.get('/index.html', requireAuth, (req, res) => {
+    res.redirect('/');
+});
+
+app.get('/buscar.html', requireAuth, allowedSearchMiddleware, (req, res) => {
+    const file = path.resolve(__dirname, 'public', 'buscar.html');
+    console.log(`[ROUTE /buscar.html] file=${file} exists=${fs.existsSync(file)}`);
+    res.sendFile(file, { dotfiles: 'allow' });
+});
+
+// Servir el resto de archivos estáticos públicamente (CSS, JS, imágenes, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
+
 
 // API: Obtener Estadísticas
 app.get('/api/stats', async (req, res) => {
