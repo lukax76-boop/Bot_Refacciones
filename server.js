@@ -287,7 +287,6 @@ app.delete('/api/admin/users/:username', requireRole('admin'), async (req, res) 
 // Rutas de Archivos HTML Protegidos (definidas ANTES de express.static)
 app.get('/login.html', (req, res) => {
     const file = path.resolve(__dirname, 'public', 'login.html');
-    console.log(`[ROUTE /login.html] file=${file} exists=${fs.existsSync(file)}`);
     res.sendFile(file, { dotfiles: 'allow' });
 });
 
@@ -297,7 +296,6 @@ app.get('/', requireAuth, (req, res) => {
         req.session.allowedSearch = false;
     }
     const file = path.resolve(__dirname, 'public', 'index.html');
-    console.log(`[ROUTE /] file=${file} exists=${fs.existsSync(file)}`);
     res.sendFile(file, { dotfiles: 'allow' });
 });
 
@@ -307,7 +305,6 @@ app.get('/index.html', requireAuth, (req, res) => {
 
 app.get('/buscar.html', requireAuth, allowedSearchMiddleware, (req, res) => {
     const file = path.resolve(__dirname, 'public', 'buscar.html');
-    console.log(`[ROUTE /buscar.html] file=${file} exists=${fs.existsSync(file)}`);
     res.sendFile(file, { dotfiles: 'allow' });
 });
 
