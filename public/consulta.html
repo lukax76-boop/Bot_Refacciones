@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Refacciones - Nonno Refaccionaria y Ferretería</title>
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Consulta el inventario de refacciones y herramientas de Nonno Refaccionaria y Ferretería. Realiza tu búsqueda por número de parte o descripción y envía tu pedido por WhatsApp al instante.">
+    <meta name="keywords" content="refacciones, ferretería, nonno, monterrey, número de parte, buscar piezas, autopartes">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-color: #121214;
+            --card-bg: #1a1a1e;
+            --primary: #fbbf24;
+            --primary-hover: #f59e0b;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #2e2e35;
+            --accent-glow: rgba(251, 191, 36, 0.15);
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h4, h5, .brand-name {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+        }
+
+        /* Contenedor principal */
+        .app-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Cabecera / Navegación */
+        header {
+            background-color: rgba(26, 26, 30, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 10px 0;
+            transition: all 0.3s ease;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            text-decoration: none;
+        }
+
+        .logo-img {
+            height: 50px;
+            width: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 8px rgba(251, 191, 36, 0.3));
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .brand-name {
+            font-size: 20px;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+
+        .brand-sub {
+            font-size: 11px;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .cart-badge-btn {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .cart-badge-btn:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .cart-count {
+            background-color: var(--primary);
+            color: #121214;
+            font-size: 12px;
+            font-weight: 800;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #1a1a1e;
+        }
+
+        /* Banner Hero */
+        .hero {
+            margin-top: 110px;
+            padding: 60px 0 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(251, 191, 36, 0.08) 0%, rgba(18, 18, 20, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .hero-title {
+            font-size: 42px;
+            color: #ffffff;
+            margin-bottom: 15px;
+            letter-spacing: -0.5px;
+        }
+
+        .hero-title span {
+            color: var(--primary);
+            text-shadow: 0 0 20px rgba(251, 191, 36, 0.2);
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 30px;
+        }
+
+        /* Alerta de Número de Parte */
+        .warning-card {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.05) 0%, rgba(26, 26, 30, 1) 100%);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-left: 5px solid var(--primary);
+            border-radius: 12px;
+            padding: 20px 25px;
+            margin-bottom: 40px;
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .warning-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 150px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.02));
+            pointer-events: none;
+        }
+
+        .warning-icon {
+            font-size: 28px;
+            color: var(--primary);
+            animation: pulse-glow 2s infinite alternate;
+        }
+
+        .warning-content h3 {
+            font-size: 18px;
+            color: #ffffff;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .warning-content p {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(251, 191, 36, 0)); }
+            100% { transform: scale(1.08); filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6)); }
+        }
+
+        /* Contenedor de Búsqueda */
+        .search-container {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+            margin-bottom: 40px;
+        }
+
+        .search-form {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            flex: 1;
+        }
+
+        .search-icon-inside {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 18px;
+        }
+
+        .search-input {
+            width: 100%;
+            background-color: #121214;
+            border: 1px solid var(--border-color);
+            color: #ffffff;
+            padding: 16px 20px 16px 55px;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
+        }
+
+        .search-btn {
+            background: linear-gradient(135deg, var(--primary) 0%, #f59e0b 100%);
+            color: #121214;
+            border: none;
+            padding: 0 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px -3px rgba(251, 191, 36, 0.4);
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -3px rgba(251, 191, 36, 0.6);
+        }
+
+        .search-btn:active {
+            transform: translateY(0);
+        }
+
+        .search-hints {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: var(--text-muted);
+            padding-left: 5px;
+        }
+
+        .search-hints span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .search-hints i {
+            color: var(--primary);
+        }
+
+        /* Sección de Resultados */
+        .results-section {
+            margin-bottom: 60px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+
+        .results-title {
+            font-size: 22px;
+            color: #ffffff;
+        }
+
+        .results-count {
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 13px;
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 25px;
+        }
+
+        /* Tarjeta de Producto */
+        .product-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .product-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(251, 191, 36, 0.3);
+            box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.4);
+        }
+
+        .product-card:hover::before {
+            opacity: 1;
+        }
+
+        .part-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+
+        .part-number-badge {
+            background-color: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            color: var(--primary);
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            font-family: 'Outfit', sans-serif;
+            text-transform: uppercase;
+        }
+
+        .stock-badge {
+            background-color: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .stock-badge.out {
+            background-color: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .part-desc {
+            font-size: 16px;
+            color: #ffffff;
+            font-weight: 600;
+            margin-bottom: 20px;
+            min-height: 48px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .part-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 15px;
+            margin-top: auto;
+        }
+
+        .price-container {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .price-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .price-value {
+            font-size: 22px;
+            font-weight: 800;
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .add-cart-btn {
+            background-color: #242429;
+            border: 1px solid var(--border-color);
+            color: #ffffff;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .add-cart-btn:hover {
+            background-color: var(--primary);
+            color: #121214;
+            border-color: var(--primary);
+            box-shadow: 0 0 10px var(--accent-glow);
+            transform: scale(1.05);
+        }
+
+        .product-card.in-cart-border {
+            border-color: rgba(251, 191, 36, 0.6);
+        }
+
+        /* Cart Drawer */
+        .cart-drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1050;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .cart-drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .cart-drawer {
+            position: fixed;
+            top: 0;
+            right: -450px;
+            width: 100%;
+            max-width: 450px;
+            height: 100vh;
+            background-color: var(--card-bg);
+            border-left: 1px solid var(--border-color);
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+            z-index: 1100;
+            display: flex;
+            flex-direction: column;
+            transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .cart-drawer-overlay.open .cart-drawer {
+            right: 0;
+        }
+
+        .cart-drawer-header {
+            padding: 25px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cart-drawer-title {
+            font-size: 20px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .cart-drawer-title i {
+            color: var(--primary);
+        }
+
+        .close-cart-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 20px;
+            cursor: pointer;
+            transition: color 0.3s;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        .close-cart-btn:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .cart-drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 25px;
+        }
+
+        /* Lista de productos en carrito */
+        .cart-items-list {
+            margin-bottom: 25px;
+        }
+
+        .cart-item {
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            gap: 12px;
+            position: relative;
+        }
+
+        .cart-item-info {
+            flex: 1;
+        }
+
+        .cart-item-part {
+            font-size: 11px;
+            color: var(--primary);
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .cart-item-desc {
+            font-size: 13px;
+            color: #ffffff;
+            font-weight: 600;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .cart-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cart-item-price {
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            background-color: #121214;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .qty-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .qty-btn:hover {
+            color: var(--primary);
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .qty-value {
+            font-size: 13px;
+            font-weight: 700;
+            width: 30px;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        .remove-item-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.3s;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .remove-item-btn:hover {
+            color: var(--danger);
+        }
+
+        .empty-cart-view {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-cart-view i {
+            font-size: 48px;
+            color: var(--border-color);
+            margin-bottom: 15px;
+        }
+
+        /* Formulario de Contacto / Identificación del Cliente */
+        .client-form-container {
+            border-top: 1px solid var(--border-color);
+            padding-top: 25px;
+            margin-top: 15px;
+        }
+
+        .form-section-title {
+            font-size: 15px;
+            color: #ffffff;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .form-input {
+            width: 100%;
+            background-color: #121214;
+            border: 1px solid var(--border-color);
+            color: #ffffff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Autocompletar Clientes sugerencias */
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #1a1a1e;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 4px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            z-index: 100;
+            max-height: 180px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .autocomplete-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            transition: background 0.2s;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+            background-color: rgba(251, 191, 36, 0.08);
+            color: var(--primary);
+        }
+
+        .autocomplete-item strong {
+            display: block;
+            color: #ffffff;
+        }
+
+        .autocomplete-item span {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .recognition-banner {
+            background-color: rgba(16, 185, 129, 0.08);
+            border: 1px dashed var(--success);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #ffffff;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .clear-recognition-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 11px;
+            text-decoration: underline;
+        }
+
+        .clear-recognition-btn:hover {
+            color: var(--danger);
+        }
+
+        /* Footer del carrito (Subtotal y Botones) */
+        .cart-drawer-footer {
+            background-color: #151518;
+            border-top: 1px solid var(--border-color);
+            padding: 25px;
+        }
+
+        .cart-summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .summary-label {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .summary-total {
+            font-size: 26px;
+            font-weight: 800;
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .send-order-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+            color: #ffffff;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+
+        .send-order-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 211, 102, 0.5);
+        }
+
+        .send-order-btn:active {
+            transform: translateY(0);
+        }
+
+        .send-order-btn.disabled {
+            background: #2e2e35;
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Buscador loader y estados */
+        .loading-view {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .loading-spinner {
+            font-size: 32px;
+            color: var(--primary);
+            animation: spin 1s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-results-view {
+            grid-column: 1 / -1;
+            background-color: var(--card-bg);
+            border: 1px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 50px 30px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .no-results-view i {
+            font-size: 40px;
+            color: var(--border-color);
+            margin-bottom: 15px;
+        }
+
+        /* Sección de Información de Contacto / Footer Principal */
+        footer {
+            background-color: #0b0b0d;
+            border-top: 1px solid var(--border-color);
+            padding: 60px 0 30px;
+            margin-top: 80px;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 50px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .footer-grid {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+        }
+
+        .footer-info-col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .footer-logo {
+            height: 60px;
+            width: auto;
+            align-self: flex-start;
+            filter: drop-shadow(0 2px 5px rgba(251, 191, 36, 0.2));
+        }
+
+        .footer-desc {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .contact-details {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            text-decoration: none;
+            color: var(--text-main);
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .contact-item:hover {
+            color: var(--primary);
+        }
+
+        .contact-icon {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            flex-shrink: 0;
+        }
+
+        .footer-map-col {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .map-title {
+            font-size: 18px;
+            color: #ffffff;
+        }
+
+        .map-frame-wrapper {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            height: 250px;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--border-color);
+            padding-top: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .hero-title {
+                font-size: 32px;
+            }
+            .search-form {
+                flex-direction: column;
+            }
+            .search-btn {
+                padding: 16px;
+                justify-content: center;
+            }
+            .footer-bottom {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Cabecera -->
+    <header id="app-header">
+        <div class="header-content">
+            <a href="#" class="brand">
+                <img src="/logo_amarillo.png" alt="Logotipo Nonno" class="logo-img">
+                <div class="brand-text">
+                    <span class="brand-name">Nonno</span>
+                    <span class="brand-sub">Refaccionaria y Ferretería</span>
+                </div>
+            </a>
+            <div class="header-actions">
+                <button class="cart-badge-btn" id="open-cart-btn">
+                    <i class="fa-solid fa-shopping-cart"></i>
+                    <span>Ver Carrito</span>
+                    <div class="cart-count" id="header-cart-count">0</div>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- Hero Section -->
+        <section class="hero">
+            <h1 class="hero-title">Buscador de <span>Refacciones</span></h1>
+            <p class="hero-subtitle">Encuentra al instante piezas y herramientas premium para tu maquinaria y vehículos. Consulta disponibilidad en tiempo real y realiza tu pedido.</p>
+        </section>
+
+        <!-- Tarjeta de Alerta Importante -->
+        <section class="warning-card">
+            <div class="warning-icon">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="warning-content">
+                <h3>¡IMPORTANTE! Búsqueda con Número de Parte Exacto</h3>
+                <p>Para garantizar una compatibilidad del 100% con tu equipo o vehículo, te sugerimos buscar utilizando el <strong>Número de Parte exacto</strong> grabado en tu pieza. Si no cuentas con él, puedes buscar escribiendo una <strong>Descripción detallada</strong> (ej. <i>"filtro de aceite premium"</i>, <i>"balatas delanteras"</i>), pero te recordamos validar la compatibilidad física antes de concretar tu orden.</p>
+            </div>
+        </section>
+
+        <!-- Caja de Búsqueda -->
+        <section class="search-container">
+            <form class="search-form" id="search-form">
+                <div class="search-input-wrapper">
+                    <i class="fa-solid fa-magnifying-glass search-icon-inside"></i>
+                    <input type="text" class="search-input" id="search-input" placeholder="Escribe el Número de Parte o la Descripción de la refacción..." autocomplete="off">
+                </div>
+                <button type="submit" class="search-btn">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span>Buscar</span>
+                </button>
+            </form>
+            <div class="search-hints">
+                <span><i class="fa-solid fa-location-dot"></i> Monterrey, N.L.</span>
+                <span><i class="fa-solid fa-shield-check"></i> Consulta consolidada 4 sucursales principales</span>
+            </div>
+        </section>
+
+        <!-- Resultados de Búsqueda -->
+        <section class="results-section">
+            <div class="results-header">
+                <h2 class="results-title" id="results-heading">Buscar Refacciones</h2>
+                <div class="results-count" id="results-counter">Ingresa un término de búsqueda</div>
+            </div>
+
+            <!-- Grid de Tarjetas -->
+            <div class="results-grid" id="results-grid">
+                <!-- Tarjetas estáticas iniciales o explicativas -->
+                <div class="no-results-view">
+                    <i class="fa-solid fa-keyboard"></i>
+                    <h3>Búsqueda de Refacciones</h3>
+                    <p>Escribe arriba el número de parte o palabras clave de la refacción que necesitas. Limitado estrictamente a las sucursales CEDIS MTY, Matriz MTY, Exhibición y Monterrey.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Drawer del Carrito de Compras -->
+    <div class="cart-drawer-overlay" id="cart-overlay">
+        <div class="cart-drawer">
+            <div class="cart-drawer-header">
+                <h3 class="cart-drawer-title">
+                    <i class="fa-solid fa-cart-shopping"></i> Tu Pedido
+                </h3>
+                <button class="close-cart-btn" id="close-cart-btn">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="cart-drawer-body">
+                <!-- Listado de Items en Carrito -->
+                <div class="cart-items-list" id="cart-items-container">
+                    <!-- Vista vacía por defecto -->
+                    <div class="empty-cart-view">
+                        <i class="fa-solid fa-cart-circle-xmark"></i>
+                        <p>Tu carrito está vacío.</p>
+                        <p style="font-size: 12px; margin-top: 5px;">Agrega refacciones desde el catálogo para iniciar tu orden.</p>
+                    </div>
+                </div>
+
+                <!-- Formulario de Contacto / Identificación -->
+                <div class="client-form-container" id="client-form" style="display: none;">
+                    <h4 class="form-section-title">
+                        <i class="fa-solid fa-address-card"></i> Datos de Contacto
+                    </h4>
+                    
+                    <!-- Banner de reconocimiento si el cliente ya está logueado -->
+                    <div class="recognition-banner" id="recognition-banner" style="display: none;">
+                        <span><i class="fa-solid fa-handshake"></i> Reconocido: <strong id="recognized-name"></strong></span>
+                        <button type="button" class="clear-recognition-btn" id="clear-recognition-btn">Cambiar</button>
+                    </div>
+
+                    <!-- Buscador / Registro de Cliente -->
+                    <div class="form-group" id="client-lookup-group">
+                        <label class="form-label" for="client-search">¿Tienes historial con nosotros? Búscate aquí:</label>
+                        <input type="text" class="form-input" id="client-search" placeholder="Escribe tu Nombre o Número de cliente..." autocomplete="off">
+                        <div class="autocomplete-dropdown" id="client-autocomplete-list"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="client-name">Nombre Completo *</label>
+                        <input type="text" class="form-input" id="client-name" placeholder="Ej. Juan Pérez Garza" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="client-phone">Teléfono Móvil (WhatsApp) *</label>
+                        <input type="tel" class="form-input" id="client-phone" placeholder="Ej. 8112345678" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="client-email">Correo Electrónico *</label>
+                        <input type="email" class="form-input" id="client-email" placeholder="Ej. cliente@correo.com" required>
+                    </div>
+
+                    <!-- Campo oculto para almacenar el número de cliente si fue reconocido -->
+                    <input type="hidden" id="client-number" value="">
+                </div>
+            </div>
+
+            <!-- Footer del Carrito -->
+            <div class="cart-drawer-footer">
+                <div class="cart-summary-row">
+                    <span class="summary-label">Total estimado:</span>
+                    <span class="summary-total" id="cart-total-value">$0.00</span>
+                </div>
+                <button class="send-order-btn disabled" id="send-order-btn" disabled>
+                    <i class="fa-brands fa-whatsapp"></i> Enviar Pedido por WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pie de Página / Información del Negocio -->
+    <footer>
+        <div class="app-container">
+            <div class="footer-grid">
+                <!-- Columna de Información -->
+                <div class="footer-info-col">
+                    <img src="/logo_amarillo.png" alt="Logotipo Nonno" class="footer-logo">
+                    <p class="footer-desc">
+                        <strong>Nonno Refaccionaria y Ferretería</strong> es tu socio confiable en Monterrey para el suministro de refacciones automotrices, industriales y de ferretería en general. Nos comprometemos con la excelencia, la rapidez y la disponibilidad inmediata.
+                    </p>
+                    
+                    <div class="contact-details">
+                        <a href="https://www.facebook.com/61577081171486/" target="_blank" class="contact-item">
+                            <div class="contact-icon"><i class="fa-brands fa-facebook-f"></i></div>
+                            <span>Síguenos en Facebook</span>
+                        </a>
+                        <a href="https://wa.me/528186555655" target="_blank" class="contact-item">
+                            <div class="contact-icon"><i class="fa-brands fa-whatsapp"></i></div>
+                            <span>WhatsApp: 81 8655 5655</span>
+                        </a>
+                        <a href="mailto:alejandro.garza@nonnoferreteria.com" class="contact-item">
+                            <div class="contact-icon"><i class="fa-solid fa-envelope"></i></div>
+                            <span>alejandro.garza@nonnoferreteria.com</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Columna de Ubicación en Mapas -->
+                <div class="footer-map-col">
+                    <h3 class="map-title"><i class="fa-solid fa-map-location-dot"></i> Nuestra Ubicación</h3>
+                    <div class="map-frame-wrapper">
+                        <!-- Mapa interactivo de Google Maps enfocado en Monterrey Centro -->
+                        <iframe 
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m13!1d115068.79093375836!2d-100.44319409138676!3d25.676174577884877!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x866295841b072213%3A0xa64aa8e096417d47!2sMonterrey%2C%20N.L.!5e0!3m2!1ses-419!2smx!4v1716757000000!5m2!1ses-419!2smx" 
+                            width="100%" 
+                            height="100%" 
+                            style="border:0;" 
+                            allowfullscreen="" 
+                            loading="lazy" 
+                            referrerpolicy="no-referrer-when-downgrade">
+                        </iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer inferior -->
+            <div class="footer-bottom">
+                <span>&copy; 2026 Nonno Refaccionaria y Ferretería. Todos los derechos reservados.</span>
+                <div class="footer-links">
+                    <a href="/privacidad.html" target="_blank">Aviso de Privacidad</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Script de Lógica Frontend -->
+    <script>
+        // --- ESTADO DE LA APLICACIÓN ---
+        let cart = [];
+        let recognizedClient = null;
+
+        // --- SELECTORES DOM ---
+        const searchForm = document.getElementById('search-form');
+        const searchInput = document.getElementById('search-input');
+        const resultsGrid = document.getElementById('results-grid');
+        const resultsHeading = document.getElementById('results-heading');
+        const resultsCounter = document.getElementById('results-counter');
+        
+        // Cart overlay & drawer
+        const cartOverlay = document.getElementById('cart-overlay');
+        const openCartBtn = document.getElementById('open-cart-btn');
+        const closeCartBtn = document.getElementById('close-cart-btn');
+        const cartItemsContainer = document.getElementById('cart-items-container');
+        const headerCartCount = document.getElementById('header-cart-count');
+        const cartTotalValue = document.getElementById('cart-total-value');
+        const sendOrderBtn = document.getElementById('send-order-btn');
+        
+        // Formulario cliente y autocomplete
+        const clientForm = document.getElementById('client-form');
+        const clientSearchInput = document.getElementById('client-search');
+        const clientAutocompleteList = document.getElementById('client-autocomplete-list');
+        const recognitionBanner = document.getElementById('recognition-banner');
+        const recognizedNameSpan = document.getElementById('recognized-name');
+        const clearRecognitionBtn = document.getElementById('clear-recognition-btn');
+        const clientNameInput = document.getElementById('client-name');
+        const clientPhoneInput = document.getElementById('client-phone');
+        const clientEmailInput = document.getElementById('client-email');
+        const clientNumberInput = document.getElementById('client-number');
+        const clientLookupGroup = document.getElementById('client-lookup-group');
+
+        // --- MANEJO DE EVENTOS ---
+
+        // Mostrar / Ocultar Carrito
+        openCartBtn.addEventListener('click', () => {
+            cartOverlay.classList.add('open');
+            document.body.style.overflow = 'hidden'; // Evitar scroll de fondo
+        });
+
+        const closeCart = () => {
+            cartOverlay.classList.remove('open');
+            document.body.style.overflow = '';
+        };
+
+        closeCartBtn.addEventListener('click', closeCart);
+        cartOverlay.addEventListener('click', (e) => {
+            if (e.target === cartOverlay) closeCart();
+        });
+
+        // Búsqueda de Refacciones
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            renderLoading();
+
+            try {
+                const response = await fetch('/public-api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderResults(data.results, query);
+                } else {
+                    renderError(data.error || "Ocurrió un error inesperado al realizar la búsqueda.");
+                }
+            } catch (err) {
+                console.error("Error al buscar refacciones:", err);
+                renderError("No pudimos conectarnos al servidor. Valida tu conexión a internet.");
+            }
+        });
+
+        // Autocompletado e Historial del Cliente
+        let lookupTimeout = null;
+        clientSearchInput.addEventListener('input', () => {
+            clearTimeout(lookupTimeout);
+            const query = clientSearchInput.value.trim();
+            
+            if (query.length < 2) {
+                clientAutocompleteList.style.display = 'none';
+                return;
+            }
+
+            lookupTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/public-api/clients/lookup?query=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    
+                    if (data.success && data.clients.length > 0) {
+                        renderClientAutocomplete(data.clients);
+                    } else {
+                        clientAutocompleteList.style.display = 'none';
+                    }
+                } catch (err) {
+                    console.error("Error consultando autocompletado de clientes:", err);
+                }
+            }, 300);
+        });
+
+        // Limpiar reconocimiento de cliente
+        clearRecognitionBtn.addEventListener('click', () => {
+            resetRecognizedClient();
+        });
+
+        // Escuchar cambios en campos de contacto para habilitar botón de WhatsApp
+        [clientNameInput, clientPhoneInput, clientEmailInput].forEach(input => {
+            input.addEventListener('input', validateForm);
+        });
+
+        // Enviar pedido por WhatsApp
+        sendOrderBtn.addEventListener('click', () => {
+            if (sendOrderBtn.classList.contains('disabled')) return;
+            sendOrderToWhatsApp();
+        });
+
+        // --- FUNCIONES DE RENDERIZADO CATÁLOGO ---
+
+        function renderLoading() {
+            resultsGrid.innerHTML = `
+                <div class="loading-view">
+                    <i class="fa-solid fa-circle-notch loading-spinner"></i>
+                    <h3>Buscando refacciones...</h3>
+                    <p>Estamos consultando el stock consolidado de MTY</p>
+                </div>
+            `;
+            resultsHeading.innerText = "Buscando...";
+            resultsCounter.innerText = "Espere un momento";
+        }
+
+        function renderError(msg) {
+            resultsGrid.innerHTML = `
+                <div class="no-results-view" style="border-color: rgba(239, 68, 68, 0.2);">
+                    <i class="fa-solid fa-triangle-exclamation" style="color: var(--danger);"></i>
+                    <h3 style="color: #ffffff;">Error en la Búsqueda</h3>
+                    <p>${msg}</p>
+                </div>
+            `;
+            resultsHeading.innerText = "Error";
+            resultsCounter.innerText = "Intente de nuevo";
+        }
+
+        function renderResults(results, query) {
+            resultsHeading.innerText = `Resultados para "${query}"`;
+            resultsCounter.innerText = `${results.length} refacciones encontradas`;
+
+            if (results.length === 0) {
+                resultsGrid.innerHTML = `
+                    <div class="no-results-view">
+                        <i class="fa-solid fa-magnifying-glass-minus"></i>
+                        <h3>Sin Existencias en Monterrey</h3>
+                        <p>No encontramos existencias de la pieza <strong>"${query}"</strong> en las sucursales CEDIS MTY, Matriz MTY, Exhibición o Monterrey.</p>
+                        <p style="font-size: 13px; margin-top: 10px; color: var(--primary);">Prueba buscando con palabras clave diferentes o verifica que el Número de Parte esté correcto.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            resultsGrid.innerHTML = '';
+            results.forEach(item => {
+                const isItemInCart = cart.some(ci => ci.part_number === item.part_number);
+                
+                const card = document.createElement('div');
+                card.className = `product-card ${isItemInCart ? 'in-cart-border' : ''}`;
+                card.id = `part-card-${item.part_number.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+                card.innerHTML = `
+                    <div>
+                        <div class="part-header">
+                            <span class="part-number-badge">${item.part_number}</span>
+                            <span class="stock-badge">
+                                <i class="fa-solid fa-boxes-stacked"></i> Disponible: ${item.total_stock} pzas
+                            </span>
+                        </div>
+                        <h3 class="part-desc">${item.description}</h3>
+                    </div>
+                    <div class="part-footer">
+                        <div class="price-container">
+                            <span class="price-label">Precio Unitario</span>
+                            <span class="price-value">$${parseFloat(item.price).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
+                        </div>
+                        <button class="add-cart-btn" onclick="addToCart('${item.part_number}', '${escapeHtml(item.description)}', ${item.price}, ${item.total_stock})" title="Añadir a mi orden">
+                            <i class="fa-solid ${isItemInCart ? 'fa-check' : 'fa-cart-plus'}" style="${isItemInCart ? 'color: var(--primary)' : ''}"></i>
+                        </button>
+                    </div>
+                `;
+                resultsGrid.appendChild(card);
+            });
+        }
+
+        // --- FUNCIONES DEL CARRITO ---
+
+        window.addToCart = function(partNumber, description, price, maxStock) {
+            const existingIndex = cart.findIndex(item => item.part_number === partNumber);
+            
+            if (existingIndex > -1) {
+                // Si ya está, aumentamos la cantidad hasta el límite de stock
+                if (cart[existingIndex].quantity < maxStock) {
+                    cart[existingIndex].quantity++;
+                } else {
+                    alert(`Lo sentimos, el stock máximo disponible en Monterrey es de ${maxStock} piezas.`);
+                }
+            } else {
+                // Nuevo item
+                cart.push({
+                    part_number: partNumber,
+                    description,
+                    price,
+                    quantity: 1,
+                    maxStock
+                });
+            }
+
+            updateCartUI();
+            
+            // Animación en el botón de la tarjeta
+            const cardEl = document.getElementById(`part-card-${partNumber.replace(/[^a-zA-Z0-9]/g, '_')}`);
+            if (cardEl) {
+                cardEl.classList.add('in-cart-border');
+                const btnIcon = cardEl.querySelector('.add-cart-btn i');
+                if (btnIcon) {
+                    btnIcon.className = 'fa-solid fa-check';
+                    btnIcon.style.color = 'var(--primary)';
+                }
+            }
+        };
+
+        function changeQuantity(partNumber, delta) {
+            const idx = cart.findIndex(item => item.part_number === partNumber);
+            if (idx === -1) return;
+
+            const item = cart[idx];
+            const newQty = item.quantity + delta;
+
+            if (newQty <= 0) {
+                removeFromCart(partNumber);
+            } else if (newQty > item.maxStock) {
+                alert(`Lo sentimos, el stock máximo disponible en Monterrey es de ${item.maxStock} piezas.`);
+            } else {
+                item.quantity = newQty;
+                updateCartUI();
+            }
+        }
+
+        function removeFromCart(partNumber) {
+            cart = cart.filter(item => item.part_number !== partNumber);
+            updateCartUI();
+
+            // Actualizar borde e icono en la tarjeta del catálogo si está visible
+            const cardEl = document.getElementById(`part-card-${partNumber.replace(/[^a-zA-Z0-9]/g, '_')}`);
+            if (cardEl) {
+                cardEl.classList.remove('in-cart-border');
+                const btnIcon = cardEl.querySelector('.add-cart-btn i');
+                if (btnIcon) {
+                    btnIcon.className = 'fa-solid fa-cart-plus';
+                    btnIcon.style.color = '';
+                }
+            }
+        }
+
+        function updateCartUI() {
+            // Contar total items
+            const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+            headerCartCount.innerText = totalItemsCount;
+
+            // Calcular total dinero
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            cartTotalValue.innerText = `$${totalPrice.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
+            if (cart.length === 0) {
+                cartItemsContainer.innerHTML = `
+                    <div class="empty-cart-view">
+                        <i class="fa-solid fa-cart-circle-xmark"></i>
+                        <p>Tu carrito está vacío.</p>
+                        <p style="font-size: 12px; margin-top: 5px;">Agrega refacciones desde el catálogo para iniciar tu orden.</p>
+                    </div>
+                `;
+                clientForm.style.display = 'none';
+                sendOrderBtn.classList.add('disabled');
+                sendOrderBtn.disabled = true;
+                return;
+            }
+
+            clientForm.style.display = 'block';
+            cartItemsContainer.innerHTML = '';
+            
+            cart.forEach(item => {
+                const subtotal = item.price * item.quantity;
+                const itemEl = document.createElement('div');
+                itemEl.className = 'cart-item';
+                itemEl.innerHTML = `
+                    <div class="cart-item-info">
+                        <span class="cart-item-part">${item.part_number}</span>
+                        <h4 class="cart-item-desc">${item.description}</h4>
+                        <div class="cart-item-footer">
+                            <span class="cart-item-price">$${parseFloat(subtotal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
+                            <div class="quantity-controls">
+                                <button class="qty-btn" onclick="changeQuantity('${item.part_number}', -1)"><i class="fa-solid fa-minus"></i></button>
+                                <span class="qty-value">${item.quantity}</span>
+                                <button class="qty-btn" onclick="changeQuantity('${item.part_number}', 1)"><i class="fa-solid fa-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="remove-item-btn" onclick="removeFromCart('${item.part_number}')" title="Eliminar"><i class="fa-solid fa-trash-can"></i></button>
+                `;
+                cartItemsContainer.appendChild(itemEl);
+            });
+
+            validateForm();
+        }
+
+        // --- LÓGICA DE RECONOCIMIENTO DE CLIENTE ---
+
+        function renderClientAutocomplete(clients) {
+            clientAutocompleteList.innerHTML = '';
+            clients.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.innerHTML = `
+                    <strong>${c.client_name}</strong>
+                    <span>Número Cliente: ${c.client_number || 'S/N'} • Teléfono: ${c.phone_number}</span>
+                `;
+                div.addEventListener('click', () => selectClient(c));
+                clientAutocompleteList.appendChild(div);
+            });
+            clientAutocompleteList.style.display = 'block';
+        }
+
+        function selectClient(client) {
+            recognizedClient = client;
+            
+            // Prefillar y deshabilitar para que no editen y manden basura
+            clientNameInput.value = client.client_name;
+            clientPhoneInput.value = client.phone_number;
+            
+            // Si el correo no existe en el historial de Supabase de whatsapp, dejamos libre para correo
+            clientNumberInput.value = client.client_number || '';
+
+            // Mostrar el banner de éxito
+            recognizedNameSpan.innerText = `${client.client_name} (${client.client_number || 'Historial'})`;
+            recognitionBanner.style.display = 'flex';
+            
+            // Ocultar buscador local
+            clientLookupGroup.style.display = 'none';
+            clientSearchInput.value = '';
+            clientAutocompleteList.style.display = 'none';
+
+            validateForm();
+        }
+
+        function resetRecognizedClient() {
+            recognizedClient = null;
+            clientNameInput.value = '';
+            clientPhoneInput.value = '';
+            clientNumberInput.value = '';
+            
+            recognitionBanner.style.display = 'none';
+            clientLookupGroup.style.display = 'block';
+            clientSearchInput.value = '';
+            
+            validateForm();
+        }
+
+        function validateForm() {
+            const hasItems = cart.length > 0;
+            const hasName = clientNameInput.value.trim().length > 3;
+            const hasPhone = clientPhoneInput.value.trim().length >= 10;
+            const hasEmail = validateEmail(clientEmailInput.value.trim());
+
+            if (hasItems && hasName && hasPhone && hasEmail) {
+                sendOrderBtn.classList.remove('disabled');
+                sendOrderBtn.disabled = false;
+            } else {
+                sendOrderBtn.classList.add('disabled');
+                sendOrderBtn.disabled = true;
+            }
+        }
+
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        // Cierra dropdown al hacer clic fuera
+        document.addEventListener('click', (e) => {
+            if (e.target !== clientSearchInput && e.target !== clientAutocompleteList) {
+                clientAutocompleteList.style.display = 'none';
+            }
+        });
+
+        // --- ENVIAR PEDIDO POR WHATSAPP ---
+
+        function sendOrderToWhatsApp() {
+            const name = clientNameInput.value.trim();
+            const phone = clientPhoneInput.value.trim();
+            const email = clientEmailInput.value.trim();
+            const clientNum = clientNumberInput.value.trim() || 'N/A';
+            const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            let msg = `🏢 *Nonno Refaccionaria y Ferretería*\n`;
+            msg += `🛒 *NUEVO PEDIDO DE REFACCIONES*\n\n`;
+            
+            msg += `👤 *DATOS DE CONTACTO DEL CLIENTE:*\n`;
+            msg += `• *Nombre:* ${name}\n`;
+            msg += `• *Teléfono:* ${phone}\n`;
+            msg += `• *Correo:* ${email}\n`;
+            msg += `• *Número Cliente:* ${clientNum}\n\n`;
+            
+            msg += `📦 *REFACCIONES SOLICITADAS:*\n`;
+            
+            cart.forEach((item, idx) => {
+                const subtotal = item.price * item.quantity;
+                msg += `${idx + 1}. *${item.part_number}* - ${item.description}\n`;
+                msg += `   *Cantidad:* ${item.quantity} | *Precio:* $${parseFloat(item.price).toLocaleString('es-MX', { minimumFractionDigits: 2 })} | *Subtotal:* $${parseFloat(subtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\n`;
+            });
+            
+            msg += `💰 *RESUMEN DE COMPRA:*\n`;
+            msg += `• *Total de Artículos:* ${totalItemsCount}\n`;
+            msg += `• *TOTAL A PAGAR:* $${totalPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\n`;
+            
+            msg += `---\n`;
+            msg += `Por favor, confírmenme disponibilidad para procesar mi orden. ¡Gracias!`;
+
+            // Construir URL de WhatsApp y redirigir
+            const encodedText = encodeURIComponent(msg);
+            const waUrl = `https://wa.me/528186555655?text=${encodedText}`;
+            window.open(waUrl, '_blank');
+        }
+
+        // --- UTILERÍAS ---
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

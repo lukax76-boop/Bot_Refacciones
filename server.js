@@ -86,6 +86,110 @@ function allowedSearchMiddleware(req, res, next) {
     res.redirect('/');
 }
 
+// =========================================================================
+// ENDPOINTS PÚBLICOS PARA LA CONSULTA DE CLIENTES Y BÚSQUEDA DE REFACCIONES
+// =========================================================================
+
+// POST: Búsqueda pública restringida a las sucursales de Monterrey
+app.post('/public-api/search', async (req, res) => {
+    const { query } = req.body;
+    if (!query || typeof query !== 'string' || !query.trim()) {
+        return res.status(400).json({ error: "Debe ingresar un término de búsqueda válido." });
+    }
+    
+    const trimmedQuery = query.trim();
+    console.log(`[PUBLIC SEARCH] Buscando "${trimmedQuery}" en sucursales CEDIS MTY, MATRIZ MTY, EXHIBICION MATRIZ, MONTERREY`);
+    
+    try {
+        // 1. Obtener todas las partes que coincidan mediante la lógica Fuzzy/Exacta de db.js
+        const allResults = await searchParts(trimmedQuery, null);
+        
+        if (!allResults || allResults.length === 0) {
+            return res.json({ success: true, results: [] });
+        }
+        
+        // 2. Obtener los IDs de las sucursales permitidas
+        const allowedBranches = ["CEDIS MTY", "MATRIZ MTY", "EXHIBICION MATRIZ", "MONTERREY"];
+        const { data: dbBranches, error: branchErr } = await supabase
+            .from('branches')
+            .select('id, name')
+            .in('name', allowedBranches);
+            
+        if (branchErr || !dbBranches || dbBranches.length === 0) {
+            console.error("Error buscando sucursales permitidas:", branchErr);
+            return res.status(500).json({ error: "Error de configuración en el inventario de sucursales." });
+        }
+        
+        const allowedBranchIds = dbBranches.map(b => b.id);
+        
+        // 3. Consultar stock consolidado de estas partes en las sucursales permitidas
+        const partNumbers = allResults.map(r => r.part.part_number);
+        const { data: invData, error: invErr } = await supabase
+            .from('inventory')
+            .select('part_number, branch_id, stock')
+            .in('part_number', partNumbers)
+            .in('branch_id', allowedBranchIds)
+            .gt('stock', 0);
+            
+        if (invErr) {
+            console.error("Error consultando inventario público:", invErr);
+            return res.status(500).json({ error: "Error al consultar inventario." });
+        }
+        
+        // 4. Consolidar el stock por refacción
+        const consolidatedResults = [];
+        allResults.forEach(r => {
+            const partStock = invData
+                .filter(i => i.part_number === r.part.part_number)
+                .reduce((sum, item) => sum + item.stock, 0);
+                
+            if (partStock > 0) {
+                consolidatedResults.push({
+                    part_number: r.part.part_number,
+                    description: r.part.description,
+                    price: r.part.price,
+                    total_stock: partStock
+                });
+            }
+        });
+        
+        res.json({ success: true, results: consolidatedResults });
+    } catch (error) {
+        console.error("Error en POST /public-api/search:", error);
+        res.status(500).json({ error: "Error interno al realizar la búsqueda pública." });
+    }
+});
+
+// GET: Búsqueda y autocompletado público de clientes para reconocimiento de historial
+app.get('/public-api/clients/lookup', async (req, res) => {
+    const { query } = req.query;
+    if (!query || typeof query !== 'string' || query.trim().length < 2) {
+        return res.json({ success: true, clients: [] });
+    }
+    
+    const trimmed = query.trim();
+    console.log(`[PUBLIC CLIENT LOOKUP] Buscando cliente por: "${trimmed}"`);
+    
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('client_name, client_number, phone_number')
+            .not('client_name', 'is', null)
+            .or(`client_name.ilike.%${trimmed}%,client_number.ilike.%${trimmed}%`)
+            .limit(5);
+            
+        if (error) {
+            console.error("Error buscando clientes:", error);
+            return res.json({ success: false, clients: [] });
+        }
+        
+        res.json({ success: true, clients: data || [] });
+    } catch (error) {
+        console.error("Error en GET /public-api/clients/lookup:", error);
+        res.status(500).json({ error: "Error interno en la búsqueda de cliente." });
+    }
+});
+
 // Proteger todos los endpoints /api excepto login/logout
 app.use('/api', (req, res, next) => {
     if (req.path === '/login' || req.path === '/logout') {
