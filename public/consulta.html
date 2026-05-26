@@ -1105,6 +1105,10 @@
             <div class="warning-content">
                 <h3>¡IMPORTANTE! Búsqueda con Número de Parte Exacto</h3>
                 <p>Para garantizar una compatibilidad del 100% con tu equipo o vehículo, te sugerimos buscar utilizando el <strong>Número de Parte exacto</strong> grabado en tu pieza. Si no cuentas con él, puedes buscar escribiendo una <strong>Descripción detallada</strong> (ej. <i>"filtro de aceite premium"</i>, <i>"balatas delanteras"</i>), pero te recordamos validar la compatibilidad física antes de concretar tu orden.</p>
+                <div style="margin-top: 15px; border-top: 1px solid rgba(251, 191, 36, 0.2); padding-top: 15px; display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-truck" style="color: var(--primary); font-size: 18px;"></i>
+                    <span style="font-size: 13px; color: var(--text-main); font-weight: 500;"><strong>Tiempo de entrega:</strong> El tiempo estimado es de <strong>24 a 48 horas hábiles</strong>, acordando previamente si la entrega se realiza en nuestra <strong>sucursal Nonno</strong> o a tu <strong>domicilio</strong>.</span>
+                </div>
             </div>
         </section>
 
@@ -1209,6 +1213,10 @@
 
             <!-- Footer del Carrito -->
             <div class="cart-drawer-footer">
+                <div style="margin-bottom: 15px; background-color: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px; padding: 10px; font-size: 11px; color: var(--text-muted); display: flex; align-items: flex-start; gap: 8px;">
+                    <i class="fa-solid fa-truck-fast" style="color: var(--primary); margin-top: 2px;"></i>
+                    <span><strong>Nota de entrega:</strong> 24 a 48 horas hábiles, previo acuerdo para entrega en sucursal Nonno o domicilio del cliente.</span>
+                </div>
                 <div class="cart-summary-row">
                     <span class="summary-label">Total estimado:</span>
                     <span class="summary-total" id="cart-total-value">$0.00</span>
@@ -1704,8 +1712,12 @@
             msg += `• *Total de Artículos:* ${totalItemsCount}\n`;
             msg += `• *TOTAL A PAGAR:* $${totalPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\n`;
             
+            msg += `🚚 *ENTREGA DE MERCANCÍA:*\n`;
+            msg += `• *Tiempo de entrega:* 24 a 48 horas hábiles.\n`;
+            msg += `• *Condición:* Acordar previamente entrega en sucursal Nonno o a domicilio del cliente.\n\n`;
+            
             msg += `---\n`;
-            msg += `Por favor, confírmenme disponibilidad para procesar mi orden. ¡Gracias!`;
+            msg += `Por favor, confírmenme disponibilidad para procesar mi orden e indiquen las opciones de entrega. ¡Gracias!`;
 
             // Construir URL de WhatsApp y redirigir
             const encodedText = encodeURIComponent(msg);
