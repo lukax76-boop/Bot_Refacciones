@@ -1206,6 +1206,14 @@
                         <input type="email" class="form-input" id="client-email" placeholder="Ej. cliente@correo.com" required>
                     </div>
 
+                    <div class="form-group" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                        <label class="form-label" for="sales-phone">Enviar pedido a (Línea de WhatsApp):</label>
+                        <select class="form-input" id="sales-phone" style="border-color: rgba(251, 191, 36, 0.3);">
+                            <option value="528186555655" selected>🟢 Ventas Principal (81 8655 5655)</option>
+                            <option value="528141974237">🟢 Ventas Sucursal (81 4197 4237)</option>
+                        </select>
+                    </div>
+
                     <!-- Campo oculto para almacenar el número de cliente si fue reconocido -->
                     <input type="hidden" id="client-number" value="">
                 </div>
@@ -1246,7 +1254,11 @@
                         </a>
                         <a href="https://wa.me/528186555655" target="_blank" class="contact-item">
                             <div class="contact-icon"><i class="fa-brands fa-whatsapp"></i></div>
-                            <span>WhatsApp: 81 8655 5655</span>
+                            <span>WhatsApp Principal: 81 8655 5655</span>
+                        </a>
+                        <a href="https://wa.me/528141974237" target="_blank" class="contact-item">
+                            <div class="contact-icon"><i class="fa-brands fa-whatsapp"></i></div>
+                            <span>WhatsApp Sucursal: 81 4197 4237</span>
                         </a>
                         <a href="mailto:alejandro.garza@nonnoferreteria.com" class="contact-item">
                             <div class="contact-icon"><i class="fa-solid fa-envelope"></i></div>
@@ -1719,9 +1731,12 @@
             msg += `---\n`;
             msg += `Por favor, confírmenme disponibilidad para procesar mi orden e indiquen las opciones de entrega. ¡Gracias!`;
 
+            // Obtener el teléfono de ventas seleccionado
+            const salesPhone = document.getElementById('sales-phone').value;
+
             // Construir URL de WhatsApp y redirigir
             const encodedText = encodeURIComponent(msg);
-            const waUrl = `https://wa.me/528186555655?text=${encodedText}`;
+            const waUrl = `https://wa.me/${salesPhone}?text=${encodedText}`;
             window.open(waUrl, '_blank');
         }
 
