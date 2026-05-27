@@ -1293,6 +1293,16 @@
         let cart = [];
         let recognizedClient = null;
 
+        // Registrar visita silenciosa al cargar la página
+        async function logVisit() {
+            try {
+                await fetch('/public-api/visit', { method: 'POST' });
+            } catch (err) {
+                console.error("Error al registrar visita:", err);
+            }
+        }
+        logVisit();
+
         // --- SELECTORES DOM ---
         const searchForm = document.getElementById('search-form');
         const searchInput = document.getElementById('search-input');

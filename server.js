@@ -22,6 +22,52 @@ app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: 'uploads/' });
 const PORT = process.env.PORT || 3000;
 
+// =========================================================================
+// HELPER PARA REGISTRAR VISITAS DE FORMA HÍBRIDA (SUPABASE + LOCAL)
+// =========================================================================
+async function logPageVisit(pageName, req) {
+    const userAgent = req.headers['user-agent'] || '';
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    
+    // 1. Intentar registrar en Supabase
+    if (supabase) {
+        try {
+            const { error } = await supabase.from('page_visits').insert([{ 
+                page_name: pageName, 
+                user_agent: userAgent,
+                ip_address: ip
+            }]);
+            if (!error) {
+                console.log(`[VISIT LOG] Visita registrada en Supabase para: ${pageName}`);
+                return;
+            }
+            console.warn("⚠️ Supabase 'page_visits' no disponible o falló, registrando en local:", error.message || error);
+        } catch (err) {
+            console.warn("⚠️ Excepción al registrar visita en Supabase, registrando en local:", err.message);
+        }
+    }
+    
+    // 2. Fallback local (archivo visits.json)
+    try {
+        const file = path.join(__dirname, 'visits.json');
+        let visits = [];
+        if (fs.existsSync(file)) {
+            const content = fs.readFileSync(file, 'utf8');
+            visits = JSON.parse(content || '[]');
+        }
+        visits.push({
+            page_name: pageName,
+            user_agent: userAgent,
+            ip_address: ip,
+            created_at: new Date().toISOString()
+        });
+        fs.writeFileSync(file, JSON.stringify(visits, null, 2), 'utf8');
+        console.log(`[VISIT LOG] Visita registrada localmente para: ${pageName}`);
+    } catch (err) {
+        console.error("❌ Error escribiendo visita local:", err);
+    }
+}
+
 // ==========================================
 // 1.5. AUTENTICACIÓN Y SEGURIDAD DEL DASHBOARD
 // ==========================================
@@ -187,6 +233,17 @@ app.get('/public-api/clients/lookup', async (req, res) => {
     } catch (error) {
         console.error("Error en GET /public-api/clients/lookup:", error);
         res.status(500).json({ error: "Error interno en la búsqueda de cliente." });
+    }
+});
+
+// POST: Registrar visita silenciosa a la página pública
+app.post('/public-api/visit', async (req, res) => {
+    try {
+        await logPageVisit('consulta', req);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error en POST /public-api/visit:", error);
+        res.json({ success: false, error: error.message });
     }
 });
 

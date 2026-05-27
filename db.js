@@ -282,32 +282,68 @@ async function logAnalytics(data) {
 }
 
 async function getStats() {
-    if (!supabase) return { totalSearches: 0, totalOrders: 0, lostSales: 0, detailedMisses: [], detailedOrders: [] };
+    let searches = 0, orders = 0, lost = 0;
+    let detailedMisses = [], detailedOrders = [];
     
-    const { count: searches } = await supabase.from('analytics').select('*', { count: 'exact', head: true });
-    const { count: orders } = await supabase.from('analytics').select('*', { count: 'exact', head: true }).eq('ordered', true);
-    const { count: lost } = await supabase.from('analytics').select('*', { count: 'exact', head: true }).eq('found', false);
+    if (supabase) {
+        try {
+            const { count: s } = await supabase.from('analytics').select('*', { count: 'exact', head: true });
+            const { count: o } = await supabase.from('analytics').select('*', { count: 'exact', head: true }).eq('ordered', true);
+            const { count: l } = await supabase.from('analytics').select('*', { count: 'exact', head: true }).eq('found', false);
+            
+            searches = s || 0;
+            orders = o || 0;
+            lost = l || 0;
 
-    // Oportunidades Perdidas
-    const { data: detailedMisses } = await supabase.from('analytics')
-        .select('created_at, state, search_query')
-        .eq('found', false)
-        .order('created_at', { ascending: false })
-        .limit(100);
+            const { data: dm } = await supabase.from('analytics')
+                .select('created_at, state, search_query')
+                .eq('found', false)
+                .order('created_at', { ascending: false })
+                .limit(100);
+            detailedMisses = dm || [];
 
-    // Ventas concretadas (con JOIN a branches para el nombre)
-    const { data: detailedOrders } = await supabase.from('analytics')
-        .select(`created_at, state, search_query, branches(name)`)
-        .eq('ordered', true)
-        .order('created_at', { ascending: false })
-        .limit(100);
+            const { data: doList } = await supabase.from('analytics')
+                .select(`created_at, state, search_query, branches(name)`)
+                .eq('ordered', true)
+                .order('created_at', { ascending: false })
+                .limit(100);
+            detailedOrders = doList || [];
+        } catch (e) {
+            console.error("Error consultando analítica en Supabase:", e);
+        }
+    }
+
+    // 1. Obtener conteo de visitas en Supabase (si existe la tabla)
+    let dbVisitsCount = 0;
+    if (supabase) {
+        try {
+            const { count } = await supabase.from('page_visits').select('*', { count: 'exact', head: true });
+            dbVisitsCount = count || 0;
+        } catch (e) {
+            // La tabla no existe aún, se ignora el error
+        }
+    }
+
+    // 2. Obtener conteo de visitas local
+    let localVisitsCount = 0;
+    try {
+        const file = path.join(__dirname, 'visits.json');
+        if (fs.existsSync(file)) {
+            const content = fs.readFileSync(file, 'utf8');
+            const visits = JSON.parse(content || '[]');
+            localVisitsCount = visits.length;
+        }
+    } catch (e) {}
+
+    const totalVisits = dbVisitsCount + localVisitsCount;
 
     return {
-        totalSearches: searches || 0,
-        totalOrders: orders || 0,
-        lostSales: lost || 0,
-        detailedMisses: detailedMisses || [],
-        detailedOrders: detailedOrders || []
+        totalSearches: searches,
+        totalOrders: orders,
+        lostSales: lost,
+        totalVisits: totalVisits,
+        detailedMisses,
+        detailedOrders
     };
 }
 

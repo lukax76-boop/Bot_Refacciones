@@ -375,9 +375,13 @@
                     <div class="stat-value text-green" id="stat-orders">0</div>
                     <div class="stat-label">Pedidos Solicitados</div>
                 </div>
-                <div class="stat-card" style="grid-column: span 2;">
+                <div class="stat-card">
                     <div class="stat-value text-red" id="stat-lost">0</div>
-                    <div class="stat-label">Ventas Perdidas (No encontrado)</div>
+                    <div class="stat-label">Ventas Perdidas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #fbbf24;" id="stat-visits">0</div>
+                    <div class="stat-label">Visitas Totales</div>
                 </div>
             </div>
         </div>
@@ -540,6 +544,7 @@
                 document.getElementById('stat-searches').textContent = data.totalSearches;
                 document.getElementById('stat-orders').textContent = data.totalOrders;
                 document.getElementById('stat-lost').textContent = data.lostSales;
+                document.getElementById('stat-visits').textContent = data.totalVisits || 0;
 
                 // Formateador de fecha
                 const formatDate = (isoString) => {
