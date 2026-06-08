@@ -180,7 +180,7 @@
 
         .buttons-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 1rem;
         }
 
@@ -532,7 +532,7 @@
             <div class="search-wrapper">
                 <div class="form-group">
                     <label for="searchQuery">¿Qué estás buscando?</label>
-                    <input type="text" id="searchQuery" class="input-text" placeholder="Escribe el número de parte (ej. 1R-1808) o describe con VIN (ej. filtros de motor C15 serie 2WS12345)...">
+                    <input type="text" id="searchQuery" class="input-text" placeholder="Escribe el número de parte o descripción de la refacción (ej. 1R-1808)...">
                 </div>
 
                 <div class="controls-row">
@@ -547,10 +547,7 @@
                         <label>&nbsp;</label>
                         <div class="buttons-grid">
                             <button id="btnPartSearch" class="btn-search part-btn">
-                                ⚙️ Por No. de Parte
-                            </button>
-                            <button id="btnVinSearch" class="btn-search vin-btn">
-                                🚗 Por VIN o Motor
+                                ⚙️ Buscar Refacción
                             </button>
                         </div>
                     </div>
@@ -603,7 +600,6 @@
         const searchQueryInput = document.getElementById('searchQuery');
         const stateSelector = document.getElementById('stateSelector');
         const btnPartSearch = document.getElementById('btnPartSearch');
-        const btnVinSearch = document.getElementById('btnVinSearch');
         const loadingPanel = document.getElementById('loadingPanel');
         const loadingText = document.getElementById('loadingText');
         const resultsPanel = document.getElementById('resultsPanel');
@@ -655,7 +651,6 @@
 
             // Disable buttons
             btnPartSearch.disabled = true;
-            btnVinSearch.disabled = true;
             searchQueryInput.disabled = true;
             stateSelector.disabled = true;
         }
@@ -667,7 +662,6 @@
             
             // Enable buttons
             btnPartSearch.disabled = false;
-            btnVinSearch.disabled = false;
             searchQueryInput.disabled = false;
             stateSelector.disabled = false;
         }
@@ -857,7 +851,6 @@
 
         // Event Listeners
         btnPartSearch.addEventListener('click', executePartSearch);
-        btnVinSearch.addEventListener('click', executeVinSearch);
 
         // Enter key in input triggers direct search
         searchQueryInput.addEventListener('keydown', (e) => {

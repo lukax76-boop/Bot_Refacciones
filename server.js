@@ -1698,23 +1698,16 @@ async function processMessageLogic(phone, text, senderName) {
 
     if (lowerText.includes('ayuda') || lowerText.includes('help') || lowerText === '?' || lowerText === 'ayuda') {
         if (text.toUpperCase().trim() === 'AYUDA') {
-            await updateUser(phone, { step: 'asking_help_details' });
+            await updateUser(phone, { step: 'asking_part' });
             delete userSearchSessions[phone];
             delete userPendingItems[phone];
             
-            const savedVin = userVins[phone];
-            if (savedVin) {
-                const explanation = `Veo que ya registramos el **Identificador (VIN/Serie de Motor): \`${savedVin}\`** en tu sesión. 🚗\n\nSolo escribe la **pieza** que buscas (ej. "filtro de aceite") y la buscaremos para ese mismo vehículo.\n\nSi deseas buscar para un vehículo diferente, ingresa el nuevo **VIN o Serie de Motor** y la pieza.`;
-                await sendMetaMessage(phone, explanation);
-                sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
-            } else {
-                const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN (17 caracteres)** o el **Número de Serie de Motor** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000" o "anillos para motor 2WS12345")*`;
-                await sendMetaMessage(phone, explanation);
-                sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
-            }
+            const explanation = `Para ayudarte a encontrar el artículo que necesitas, por favor escríbeme el **número de parte** o la **descripción de la refacción** que buscas.\n\n*(Ejemplo: "1R-1808" o "filtro de aceite Caterpillar")*`;
+            await sendMetaMessage(phone, explanation);
+            sendMetaVoiceNote(phone, explanation).catch(e => console.error("TTS error:", e));
         } else {
             await updateUser(phone, { step: 'asking_help_menu_choice' });
-            const helpMsg = `📞 *¡Bienvenido a nuestro Servicio de Ayuda!* 📞\n\n*¿Cómo te podemos ayudar?*\n\n1️⃣ *Buscar una Refacción:* Escribe el nombre de la pieza que necesitas (ej: "Filtro de aceite")\n\n2️⃣ *Cambiar de Estado:* Escribe *ESTADO* para cambiar tu zona de búsqueda\n\n3️⃣ *Ver Sucursales:* Escribe *SUCURSALES* para ver nuestro directorio completo\n\n4️⃣ *Mi Carrito:* Escribe *FINALIZAR* para completar tu pedido o *VACIAR* para limpiar el carrito\n\n5️⃣ *Contacto Directo:* Si tienes una pregunta específica, aquí estamos para ayudarte 🤝\n\n💡 *Consejo:* Puedes escribir en voz o texto. Nuestro sistema entiende audios, números de VIN y descripciones de piezas.\n\n¿En qué te podemos asistir hoy?`;
+            const helpMsg = `📞 *¡Bienvenido a nuestro Servicio de Ayuda!* 📞\n\n*¿Cómo te podemos ayudar?*\n\n1️⃣ *Buscar una Refacción:* Escribe el nombre o número de la pieza que necesitas (ej: "Filtro de aceite")\n\n2️⃣ *Cambiar de Estado:* Escribe *ESTADO* para cambiar tu zona de búsqueda\n\n3️⃣ *Ver Sucursales:* Escribe *SUCURSALES* para ver nuestro directorio completo\n\n4️⃣ *Mi Carrito:* Escribe *FINALIZAR* para completar tu pedido o *VACIAR* para limpiar el carrito\n\n5️⃣ *Contacto Directo:* Si tienes una pregunta específica, aquí estamos para ayudarte 🤝\n\n💡 *Consejo:* Puedes escribir en voz o texto. Nuestro sistema entiende audios y descripciones de piezas.\n\n¿En qué te podemos asistir hoy?`;
             await sendMetaMessage(phone, helpMsg);
             sendMetaVoiceNote(phone, `Bienvenido al servicio de ayuda. Puedes buscar una refacción, cambiar de estado, ver nuestras sucursales, o completar tu pedido. ¿En qué puedo ayudarte?`).catch(e => console.error("TTS error:", e));
         }
@@ -1766,20 +1759,13 @@ async function processMessageLogic(phone, text, senderName) {
             const choice = cleanText.toLowerCase();
 
             if (choice === '1' || choice.includes('buscar') || choice.includes('refaccion') || choice.includes('refacción')) {
-                await updateUser(phone, { step: 'asking_help_details' });
+                await updateUser(phone, { step: 'asking_part' });
                 delete userSearchSessions[phone];
                 delete userPendingItems[phone];
                 
-                const savedVin = userVins[phone];
-                if (savedVin) {
-                    const explanation = `Veo que ya registramos el **Identificador (VIN/Serie de Motor): \`${savedVin}\`** en tu sesión. 🚗\n\nSolo escribe la **pieza** que buscas (ej. "filtro de aceite") y la buscaremos para ese mismo vehículo.\n\nSi deseas buscar para un vehículo diferente, ingresa el nuevo **VIN o Serie de Motor** y la pieza.`;
-                    await sendMetaMessage(phone, explanation);
-                    sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
-                } else {
-                    const explanation = `Para ayudarte a encontrar el número de parte exacto que necesitas, por favor envíanos:\n\n1. El **VIN (17 caracteres)** o el **Número de Serie de Motor** de tu vehículo.\n2. La **descripción clara de la pieza** que estás buscando.\n\n*(Ejemplo: "foco de reversa de 3VW3B7AN1H0000000" o "anillos para motor 2WS12345")*`;
-                    await sendMetaMessage(phone, explanation);
-                    sendMetaVoiceNote(phone, cleanTextForTTS(explanation)).catch(e => console.error("TTS error:", e));
-                }
+                const explanation = `Para ayudarte a encontrar el artículo que necesitas, por favor escríbeme el **número de parte** o la **descripción de la refacción** que buscas.\n\n*(Ejemplo: "1R-1808" o "filtro de aceite Caterpillar")*`;
+                await sendMetaMessage(phone, explanation);
+                sendMetaVoiceNote(phone, explanation).catch(e => console.error("TTS error:", e));
                 return;
             }
             else if (choice === '2' || choice === 'estado' || choice.includes('cambiar')) {
@@ -1874,39 +1860,7 @@ async function processMessageLogic(phone, text, senderName) {
                 }
             }
 
-            // ✅ NUEVA LÓGICA: DETECTAR Y CONFIRMAR VIN O NÚMERO DE MOTOR
-            const vinData = extractVINAndPart(text);
-            if (vinData.vin || vinData.motor) {
-                let vinConfirmMsg = "📌 *He detectado los siguientes datos:*\n\n";
-                
-                if (vinData.vin) {
-                    vinConfirmMsg += `🔑 *VIN:* \`${vinData.vin}\`\n`;
-                }
-                if (vinData.motor) {
-                    vinConfirmMsg += `⚙️ *Número de Motor:* \`${vinData.motor}\`\n`;
-                }
-                
-                if (vinData.partDescription) {
-                    vinConfirmMsg += `🔧 *Refacción buscada:* ${vinData.partDescription}\n`;
-                } else {
-                    vinConfirmMsg += `⚠️ *No detecté la refacción que buscas.*\n`;
-                }
-                
-                vinConfirmMsg += `\n¿Es correcto esta información? Responde SÍ para continuar o NO para corregir.`;
-                
-                // Guardar datos temporales
-                userPendingItems[phone] = {
-                    vin: vinData.vin,
-                    motor: vinData.motor,
-                    partText: vinData.partDescription || text,
-                    originalText: text
-                };
-                
-                await updateUser(phone, { step: 'confirming_vin' });
-                await sendMetaMessage(phone, vinConfirmMsg);
-                sendMetaVoiceNote(phone, vinConfirmMsg).catch(e => console.error("TTS error:", e));
-                return;
-            }
+            // (Lógica de detección automática de VIN desactivada a petición del usuario para ocultar la opción por completo)
 
             const state = user.current_state;
             await sendMetaMessage(phone, "🔍 Buscando en nuestro inventario...");
