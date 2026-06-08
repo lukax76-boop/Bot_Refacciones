@@ -1696,6 +1696,8 @@ async function processMessageLogic(phone, text, senderName) {
         return;
     }
 
+    // (Comando de ayuda desactivado a petición del usuario para ocultar la funcionalidad de ayuda por completo)
+    /*
     if (lowerText.includes('ayuda') || lowerText.includes('help') || lowerText === '?' || lowerText === 'ayuda') {
         if (text.toUpperCase().trim() === 'AYUDA') {
             await updateUser(phone, { step: 'asking_part' });
@@ -1713,6 +1715,7 @@ async function processMessageLogic(phone, text, senderName) {
         }
         return;
     }
+    */
 
     try {
         if (step === 'idle') {
@@ -1727,14 +1730,14 @@ async function processMessageLogic(phone, text, senderName) {
 
             if (user.current_state) {
                 await updateUser(phone, { step: 'asking_part' });
-                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nSi ya conoces el número de parte de la refacción que estás buscando, envíame un mensaje de voz o texto con la información.\n\nSi aun no estás seguro del número de parte que necesitas, escribe *AYUDA* y te apoyamos.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
+                greeting += `\n\nRealizaré las búsquedas en tu estado preferido: *${user.current_state}*.\n\nSi ya conoces el número de parte o la descripción de la refacción que estás buscando, envíame un mensaje de voz o texto con la información.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona, o *SUCURSALES* para ver nuestro directorio._`;
                 await sendMetaMessage(phone, greeting);
                 sendMetaVoiceNote(phone, greeting).catch(e => console.error("TTS error:", e));
             } else {
                 const detectedState = detectStateFromPhone(phone);
                 if (detectedState) {
                     await updateUser(phone, { current_state: detectedState, step: 'asking_part' });
-                    const msg = `${greeting}\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nSi ya conoces el número de parte de la refacción que estás buscando, envíame un mensaje de voz o texto con la información.\n\nSi aun no estás seguro del número de parte que necesitas, escribe *AYUDA* y te apoyamos.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`;
+                    const msg = `${greeting}\n\nPor tu código de área veo que nos contactas desde *${detectedState}*.\n\nSi ya conoces el número de parte o la descripción de la refacción que estás buscando, envíame un mensaje de voz o texto con la información.\n\n💡 _Menú rápido: Escribe *ESTADO* para cambiar de zona._`;
                     await sendMetaMessage(phone, msg);
                     sendMetaVoiceNote(phone, msg).catch(e => console.error("TTS error:", e));
                 } else {
