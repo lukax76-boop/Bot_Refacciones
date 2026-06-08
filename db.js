@@ -394,7 +394,11 @@ async function getBranchesDirectory(state) {
     
     data.forEach(b => {
         msg += `📍 *${b.name}*\n`;
-        if (b.address) msg += `🗺️ Dirección: ${b.address}\n`;
+        if (b.address) {
+            msg += `🗺️ Dirección: ${b.address}\n`;
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.name + ' ' + b.address)}`;
+            msg += `📍 Google Maps: ${mapsUrl}\n`;
+        }
         if (b.contact) msg += `📞 Contacto: ${b.contact}\n`;
         msg += `\n`;
     });

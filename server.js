@@ -1670,11 +1670,12 @@ async function processMessageLogic(phone, text, senderName) {
     userLastActive[phone] = now;
     
     const lowerText = text.toLowerCase().trim();
+    const cleanLowerText = lowerText.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?¿]/g,"").trim();
     const greetings = ['hola', 'hola!', 'ola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches', 'buenas', 'que tal', 'qué tal', 'reiniciar', 'menu', 'menú'];
     
-    if (greetings.includes(lowerText)) {
+    if (greetings.includes(cleanLowerText) || greetings.includes(lowerText)) {
         await updateUser(phone, { step: 'idle' });
-        if (lowerText === 'reiniciar' || lowerText === 'menu' || lowerText === 'menú') {
+        if (cleanLowerText === 'reiniciar' || cleanLowerText === 'menu' || cleanLowerText === 'menú') {
             await sendMetaMessage(phone, "🔄 *Conversación reiniciada*");
         }
         step = 'idle';
@@ -1684,13 +1685,13 @@ async function processMessageLogic(phone, text, senderName) {
         delete userVins[phone];
     }
 
-    if (text.toUpperCase() === 'SUCURSALES' || text.toUpperCase() === 'DIRECCION' || text.toUpperCase() === 'DIRECCIÓN' || text.toUpperCase() === 'CONTACTO') {
+    if (cleanLowerText === 'sucursales' || cleanLowerText === 'direccion' || cleanLowerText === 'dirección' || cleanLowerText === 'contacto' || cleanLowerText === 'direcciones' || cleanLowerText.includes('sucursales') || cleanLowerText.includes('direcciones')) {
         const branchesInfo = await getBranchesDirectory(user.current_state);
         await sendMetaMessage(phone, branchesInfo);
         return;
     }
 
-    if (text.toUpperCase() === 'ESTADO') {
+    if (cleanLowerText === 'estado' || cleanLowerText.includes('cambiar de estado') || cleanLowerText.includes('cambio de estado')) {
         await updateUser(phone, { step: 'asking_state', current_state: null });
         await sendStateOptionsList(phone, user, "Cambiando de estado... 📍\n¿En qué *Estado de la República* deseas hacer la consulta ahora?");
         return;
